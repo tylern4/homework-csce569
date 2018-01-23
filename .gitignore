@@ -5,3 +5,11 @@
 
 *.o
 Homework1/mm
+Homework1/Resources/axpy
+Homework1/Resources/jacobi_openmp
+Homework1/Resources/matvec
+Homework1/Resources/mm_openmp
+Homework1/Resources/omp_hello
+Homework1/Resources/sum
+Homework1/Resources/sum_openmp
+Homework1/matvec
