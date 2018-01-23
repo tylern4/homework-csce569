@@ -3,4 +3,5 @@
 
 *.docx
 
-Homework1/sum
+*.o
+Homework1/mm
