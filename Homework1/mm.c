@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
 
   /* example run */
   double elapsed_mm = read_timer();
-  // mm(N, K, M, A, B, C);
+  mm(N, K, M, A, B, C);
   elapsed_mm = (read_timer() - elapsed_mm);
 
   double elapsed_mm_omp_parallel = read_timer();
@@ -92,7 +92,7 @@ int main(int argc, char *argv[]) {
          M * N * K / (1.0e6 * elapsed_mm));
   printf("mm_omp_parallel:\t\t%4f\t%4f\n", elapsed_mm_omp_parallel * 1.0e3,
          M * N * K / (1.0e6 * elapsed_mm_omp_parallel));
-  printf("mm_omp_paralell_for:\t\t%4f\t%4f\n", elapsed_mm_omp_parallel * 1.0e3,
+  printf("mm_omp_paralell_for:\t\t%4f\t%4f\n", elapsed_mm_omp_parallel_for * 1.0e3,
          M * N * K / (1.0e6 * elapsed_mm_omp_parallel_for));
 
   free(A);
@@ -116,7 +116,7 @@ void mm_omp_parallel(int N, int K, int M, REAL *A, REAL *B, REAL *C) {}
 
 void mm_omp_parallel_for(int N, int K, int M, REAL *A, REAL *B, REAL *C) {
   int i, j, w;
-#pragma omp parallel for
+#pragma omp parallel for private (i, j, w) num_threads(num_ths)
   for (i = 0; i < N; i++)
     for (j = 0; j < M; j++) {
       REAL temp = 0.0;
