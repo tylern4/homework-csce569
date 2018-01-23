@@ -67,7 +67,7 @@ int main(int argc, char *argv[]) {
 
   /* example run */
   double elapsed_mm = read_timer();
-  mm(N, K, M, A, B, C);
+  // mm(N, K, M, A, B, C);
   elapsed_mm = (read_timer() - elapsed_mm);
 
   double elapsed_mm_omp_parallel = read_timer();
