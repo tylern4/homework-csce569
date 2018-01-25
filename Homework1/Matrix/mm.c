@@ -91,9 +91,7 @@ int main(int argc, char *argv[]) {
          M * N * K / (1.0e6 * elapsed_mm_CR));
   printf("mm col col:\t\t\t\t%4f\t%4f\n", elapsed_mm_CC * 1.0e3,
          M * N * K / (1.0e6 * elapsed_mm_CC));
-  
-  
-  
+
   free(A);
   free(B);
   free(C);
@@ -114,24 +112,22 @@ void mm(int N, int K, int M, REAL *A, REAL *B, REAL *C, int A_rowMajor,
       }
   }
   // A columbmajor B rowmajor
-  // swap N <-> K
   else if (A_rowMajor == 0 && B_rowMajor > 0) {
-    for (i = 0; i < K; i++)
+    for (i = 0; i < N; i++)
       for (j = 0; j < M; j++) {
         REAL temp = 0.0;
-        for (w = 0; w < N; w++)
-          temp += A[i * N + w] * B[w * M + j];
+        for (w = 0; w < K; w++)
+          temp += A[w * K + i] * B[w * M + j];
         C[i * M + j] = temp;
       }
   }
   // A rowmajor B columbmajor
-  // swap M <-> K
   else if (A_rowMajor > 0 && B_rowMajor == 0) {
     for (i = 0; i < N; i++)
-      for (j = 0; j < K; j++) {
+      for (j = 0; j < M; j++) {
         REAL temp = 0.0;
-        for (w = 0; w < M; w++)
-          temp += A[i * K + w] * B[w * K + j];
+        for (w = 0; w < K; w++)
+          temp += A[w * K + i] * B[j * M + w];
         C[i * M + j] = temp;
       }
   }
@@ -142,7 +138,7 @@ void mm(int N, int K, int M, REAL *A, REAL *B, REAL *C, int A_rowMajor,
       for (j = 0; j < M; j++) {
         REAL temp = 0.0;
         for (w = 0; w < K; w++)
-          temp += A[i * K + w] * B[w * M + j];
+          temp += A[i * K + w] * B[j * M + w];
         C[i * M + j] = temp;
       }
   }
