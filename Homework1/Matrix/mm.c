@@ -53,8 +53,10 @@ int main(int argc, char *argv[]) {
 
   REAL *A = malloc(sizeof(REAL) * N * K);
   REAL *B = malloc(sizeof(REAL) * K * M);
-  REAL *C = malloc(sizeof(REAL) * N * M);
-  REAL *D = malloc(sizeof(REAL) * N);
+  REAL *C_RR = malloc(sizeof(REAL) * N * M);
+  REAL *C_RC = malloc(sizeof(REAL) * N * M);
+  REAL *C_CR = malloc(sizeof(REAL) * N * M);
+  REAL *C_CC = malloc(sizeof(REAL) * N * M);
 
   srand48((1 << 12));
   init(A, N * K);
@@ -62,19 +64,19 @@ int main(int argc, char *argv[]) {
 
   /* example run */
   double elapsed_mm_RR = read_timer();
-  mm(N, K, M, A, B, C, 1, 1);
+  mm(N, K, M, A, B, C_RR, 1, 1);
   elapsed_mm_RR = (read_timer() - elapsed_mm_RR);
 
   double elapsed_mm_RC = read_timer();
-  mm(N, K, M, A, B, C, 1, 0);
+  mm(N, K, M, A, B, C_RC, 1, 0);
   elapsed_mm_RC = (read_timer() - elapsed_mm_RC);
 
   double elapsed_mm_CR = read_timer();
-  mm(N, K, M, A, B, C, 0, 1);
+  mm(N, K, M, A, B, C_CR, 0, 1);
   elapsed_mm_CR = (read_timer() - elapsed_mm_CR);
 
   double elapsed_mm_CC = read_timer();
-  mm(N, K, M, A, B, C, 0, 0);
+  mm(N, K, M, A, B, C_CC, 0, 0);
   elapsed_mm_CC = (read_timer() - elapsed_mm_CC);
 
   /* you should add the call to each function and time the execution */
@@ -92,9 +94,18 @@ int main(int argc, char *argv[]) {
   printf("mm col col:\t\t\t\t%4f\t%4f\n", elapsed_mm_CC * 1.0e3,
          M * N * K / (1.0e6 * elapsed_mm_CC));
 
+  /*printf("\n");
+  for (int i = 0; i < M * N; i++) {
+    printf("%f,%f,%f,%f\n", C_RR[i], C_RC[i], C_CR[i], C_CC[i]);
+  }
+  printf("\n");
+  */
   free(A);
   free(B);
-  free(C);
+  free(C_RR);
+  free(C_RC);
+  free(C_CR);
+  free(C_CC);
   return 0;
 }
 

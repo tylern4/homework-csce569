@@ -1,14 +1,15 @@
 CC = gcc
-CCFLAGS = -O0 -w -g 
+CCFLAGS = -w -g
 LINKS = -lm -fopenmp
 PROG = $(patsubst %.c,%,$(wildcard *.c))
 
 .PHONY: all clean
 
-all: clean $(PROG)
+all: $(PROG)
 
 $(PROG): %: %.c
-	$(CC) $(CCFLAGS) -o $@ $< $(LINKS)
+	$(CC) -O0 $(CCFLAGS) -o $@_0 $< $(LINKS)
+	$(CC) -O3 $(CCFLAGS) -o $@_3 $< $(LINKS)
 
-clean: 
-	rm -f $(PROG)
+clean:
+	rm -f mm_0 mm_3 matvec_0 matvec_3
