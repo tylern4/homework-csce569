@@ -27,7 +27,7 @@ void csv_hist(float g[], float b[], float gr[], float r[]);
 
 int main(int argc, char **argv) {
   cv::Mat src;
-  cv::String imageName("lena.jpg"); // by default
+  cv::String imageName("../data/lena.jpg"); // by default
   if (argc > 1) {
     imageName = argv[1];
   }
