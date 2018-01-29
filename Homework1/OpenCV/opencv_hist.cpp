@@ -21,10 +21,9 @@ double read_timer_ms() {
 }
 
 void opencv_hist(cv::Mat src);
-void my_hist(cv::Mat src, unsigned long histogram[256]);
-
-void save_hist(unsigned long g[], unsigned long b[], unsigned long gr[],
-               unsigned long r[]);
+void my_hist(cv::Mat src, float histogram[256]);
+void normalize_hist(float histogram[256]);
+void csv_hist(float g[], float b[], float gr[], float r[]);
 
 int main(int argc, char **argv) {
   cv::Mat src;
@@ -37,11 +36,11 @@ int main(int argc, char **argv) {
     std::cerr << "Error opening file\n\n";
     return -1;
   }
-  opencv_hist(src);
-  unsigned long histogram_gray[256] = {0};
-  unsigned long histogram_blue[256] = {0};
-  unsigned long histogram_green[256] = {0};
-  unsigned long histogram_red[256] = {0};
+
+  float histogram_gray[256] = {0};
+  float histogram_blue[256] = {0};
+  float histogram_green[256] = {0};
+  float histogram_red[256] = {0};
 
   cv::Mat bgr[3];
   split(src, bgr);
@@ -69,61 +68,54 @@ int main(int argc, char **argv) {
   printf("green:\t\t\t\t%4f\n", elapsed_my_green * 1.0e3);
   printf("red:\t\t\t\t%4f\n", elapsed_my_red * 1.0e3);
 
-  // Draw the histograms for B, G and R
+  int histSize = 256;
   int hist_w = 512;
   int hist_h = 400;
   int bin_w = cvRound((double)hist_w / histSize);
   cv::Mat histImage(hist_h, hist_w, CV_8UC3, cv::Scalar(0, 0, 0));
-  normalize(histogram_blue, histogram_blue, 0, histImage.rows, cv::NORM_MINMAX,
-            -1, cv::Mat());
-  normalize(histogram_green, histogram_green, 0, histImage.rows,
-            cv::NORM_MINMAX, -1, cv::Mat());
-  normalize(histogram_red, histogram_red, 0, histImage.rows, cv::NORM_MINMAX,
-            -1, cv::Mat());
-
   for (int i = 1; i < histSize; i++) {
-    line(histImage, cv::Point(bin_w * (i - 1),
-                              hist_h - cvRound(histogram_blue.at<int>(i - 1))),
-         cv::Point(bin_w * (i), hist_h - cvRound(histogram_blue.at<int>(i))),
+    line(histImage,
+         cv::Point(bin_w * (i - 1), hist_h - hist_h * histogram_blue[i - 1]),
+         cv::Point(bin_w * (i), hist_h - hist_h * histogram_blue[i]),
          cv::Scalar(255, 0, 0), 2, 8, 0);
-    line(histImage, cv::Point(bin_w * (i - 1),
-                              hist_h - cvRound(histogram_green.at<int>(i - 1))),
-         cv::Point(bin_w * (i), hist_h - cvRound(histogram_green.at<int>(i))),
+    line(histImage,
+         cv::Point(bin_w * (i - 1), hist_h - hist_h * histogram_green[i - 1]),
+         cv::Point(bin_w * (i), hist_h - hist_h * histogram_green[i]),
          cv::Scalar(0, 255, 0), 2, 8, 0);
-    line(histImage, cv::Point(bin_w * (i - 1),
-                              hist_h - cvRound(histogram_red.at<int>(i - 1))),
-         cv::Point(bin_w * (i), hist_h - cvRound(histogram_red.at<int>(i))),
+    line(histImage,
+         cv::Point(bin_w * (i - 1), hist_h - hist_h * histogram_red[i - 1]),
+         cv::Point(bin_w * (i), hist_h - hist_h * histogram_red[i]),
          cv::Scalar(0, 0, 255), 2, 8, 0);
   }
-  namedWindow("calcHist Demo", cv::WINDOW_AUTOSIZE);
-  imshow("calcHist Demo", histImage);
-  cv::waitKey(0);
+  namedWindow("My Hist", cv::WINDOW_AUTOSIZE);
+  imshow("My Hist", histImage);
 
   opencv_hist(src);
-
+  cv::waitKey(0);
+  // csv_hist(histogram_gray, histogram_blue, histogram_green, histogram_red);
   return 0;
 }
 
-void my_hist(cv::Mat src, unsigned long histogram[256]) {
+void normalize_hist(float histogram[256]) {
+  int max = histogram[0];
+  for (int x = 0; x < 256; x++) {
+    if (histogram[x] > max)
+      max = histogram[x];
+  }
+  for (int x = 0; x < 256; x++) {
+    histogram[x] /= (float)max;
+  }
+}
+
+void my_hist(cv::Mat src, float histogram[256]) {
   short k;
   for (int i = 0; i < src.cols; i++) {
     for (int j = 0; j < src.rows; j++) {
       k = src.at<uchar>(j, i);
-      histogram[k] = histogram[k] + 1;
+      histogram[k] += 1;
     }
   }
-}
-
-void save_hist(unsigned long g[], unsigned long b[], unsigned long gr[],
-               unsigned long r[]) {
-  std::cerr << "x,gray,blue,green,red" << std::endl;
-  for (int x = 0; x < 256; x++) {
-    std::cerr << x << ",";
-    std::cerr << g[x] << ",";
-    std::cerr << b[x] << ",";
-    std::cerr << gr[x] << ",";
-    std::cerr << r[x] << endl;
-  }
+  normalize_hist(histogram);
 }
 
 void opencv_hist(cv::Mat src) {
@@ -166,5 +158,16 @@ void opencv_hist(cv::Mat src) {
   }
   namedWindow("calcHist Demo", cv::WINDOW_AUTOSIZE);
   imshow("calcHist Demo", histImage);
-  // cv::waitKey(0);
+  cv::waitKey(0);
+}
+
+void csv_hist(float g[], float b[], float gr[], float r[]) {
+  std::cerr << "x,gray,blue,green,red" << std::endl;
+  for (int x = 0; x < 256; x++) {
+    std::cerr << x << ",";
+    std::cerr << g[x] << ",";
+    std::cerr << b[x] << ",";
+    std::cerr << gr[x] << ",";
+    std::cerr << r[x] << endl;
+  }
 }
