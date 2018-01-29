@@ -82,19 +82,17 @@ int main(int argc, char **argv) {
             -1, cv::Mat());
 
   for (int i = 1; i < histSize; i++) {
-    line(histImage,
-         cv::Point(bin_w * (i - 1),
-                   hist_h - cvRound(histogram_blue.at<float>(i - 1))),
-         cv::Point(bin_w * (i), hist_h - cvRound(histogram_blue.at<float>(i))),
+    line(histImage, cv::Point(bin_w * (i - 1),
+                              hist_h - cvRound(histogram_blue.at<int>(i - 1))),
+         cv::Point(bin_w * (i), hist_h - cvRound(histogram_blue.at<int>(i))),
          cv::Scalar(255, 0, 0), 2, 8, 0);
-    line(histImage,
-         cv::Point(bin_w * (i - 1),
-                   hist_h - cvRound(histogram_green.at<float>(i - 1))),
-         cv::Point(bin_w * (i), hist_h - cvRound(histogram_green.at<float>(i))),
+    line(histImage, cv::Point(bin_w * (i - 1),
+                              hist_h - cvRound(histogram_green.at<int>(i - 1))),
+         cv::Point(bin_w * (i), hist_h - cvRound(histogram_green.at<int>(i))),
          cv::Scalar(0, 255, 0), 2, 8, 0);
     line(histImage, cv::Point(bin_w * (i - 1),
-                              hist_h - cvRound(histogram_red.at<float>(i - 1))),
-         cv::Point(bin_w * (i), hist_h - cvRound(histogram_red.at<float>(i))),
+                              hist_h - cvRound(histogram_red.at<int>(i - 1))),
+         cv::Point(bin_w * (i), hist_h - cvRound(histogram_red.at<int>(i))),
          cv::Scalar(0, 0, 255), 2, 8, 0);
   }
   namedWindow("calcHist Demo", cv::WINDOW_AUTOSIZE);
