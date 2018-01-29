@@ -69,6 +69,40 @@ int main(int argc, char **argv) {
   printf("green:\t\t\t\t%4f\n", elapsed_my_green * 1.0e3);
   printf("red:\t\t\t\t%4f\n", elapsed_my_red * 1.0e3);
 
+  // Draw the histograms for B, G and R
+  int hist_w = 512;
+  int hist_h = 400;
+  int bin_w = cvRound((double)hist_w / histSize);
+  cv::Mat histImage(hist_h, hist_w, CV_8UC3, cv::Scalar(0, 0, 0));
+  normalize(histogram_blue, histogram_blue, 0, histImage.rows, cv::NORM_MINMAX,
+            -1, cv::Mat());
+  normalize(histogram_green, histogram_green, 0, histImage.rows,
+            cv::NORM_MINMAX, -1, cv::Mat());
+  normalize(histogram_red, histogram_red, 0, histImage.rows, cv::NORM_MINMAX,
+            -1, cv::Mat());
+
+  for (int i = 1; i < histSize; i++) {
+    line(histImage,
+         cv::Point(bin_w * (i - 1),
+                   hist_h - cvRound(histogram_blue.at<float>(i - 1))),
+         cv::Point(bin_w * (i), hist_h - cvRound(histogram_blue.at<float>(i))),
+         cv::Scalar(255, 0, 0), 2, 8, 0);
+    line(histImage,
+         cv::Point(bin_w * (i - 1),
+                   hist_h - cvRound(histogram_green.at<float>(i - 1))),
+         cv::Point(bin_w * (i), hist_h - cvRound(histogram_green.at<float>(i))),
+         cv::Scalar(0, 255, 0), 2, 8, 0);
+    line(histImage, cv::Point(bin_w * (i - 1),
+                              hist_h - cvRound(histogram_red.at<float>(i - 1))),
+         cv::Point(bin_w * (i), hist_h - cvRound(histogram_red.at<float>(i))),
+         cv::Scalar(0, 0, 255), 2, 8, 0);
+  }
+  namedWindow("calcHist Demo", cv::WINDOW_AUTOSIZE);
+  imshow("calcHist Demo", histImage);
+  cv::waitKey(0);
+
+  opencv_hist(src);
+
   return 0;
 }
 
