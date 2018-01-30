@@ -1,136 +1,113 @@
-/**
- * file Smoothing.cpp
- * brief Sample code for simple filters
- * author OpenCV team
- */
-
-#include <iostream>
-#include "opencv2/imgproc.hpp"
-#include "opencv2/imgcodecs.hpp"
 #include "opencv2/highgui.hpp"
+#include "opencv2/imgcodecs.hpp"
+#include "opencv2/imgproc.hpp"
+#include <iostream>
+#include <sys/timeb.h>
 
 using namespace std;
-using namespace cv;
 
-/// Global Variables
-int DELAY_CAPTION = 1500;
-int DELAY_BLUR = 100;
-int MAX_KERNEL_LENGTH = 31;
+/* read timer in second */
+double read_timer() {
+  struct timeb tm;
+  ftime(&tm);
+  return (double)tm.time + (double)tm.millitm / 1000.0;
+}
 
-Mat src;
-Mat dst;
-char window_name[] = "Smoothing Demo";
+/* read timer in ms */
+double read_timer_ms() {
+  struct timeb tm;
+  ftime(&tm);
+  return (double)tm.time * 1000.0 + (double)tm.millitm;
+}
 
-/// Function headers
-int display_caption(const char *caption);
-int display_dst(int delay);
+short lpf_filter_6[3][3] = {{0, 1, 0}, {1, 2, 1}, {0, 1, 0}};
 
-/**
- * function main
- */
+short lpf_filter_9[3][3] = {{1, 1, 1}, {1, 1, 1}, {1, 1, 1}};
+
+short lpf_filter_10[3][3] = {{1, 1, 1}, {1, 2, 1}, {1, 1, 1}};
+
+short lpf_filter_16[3][3] = {{1, 2, 1}, {2, 4, 2}, {1, 2, 1}};
+
+short lpf_filter_32[3][3] = {{1, 4, 1}, {4, 12, 4}, {1, 4, 1}};
+
+short hpf_filter_1[3][3] = {{0, -1, 0}, {-1, 5, -1}, {0, -1, 0}};
+
+short hpf_filter_2[3][3] = {{-1, -1, -1}, {-1, 9, -1}, {-1, -1, -1}};
+
+short hpf_filter_3[3][3] = {{1, -2, 1}, {-2, 5, -2}, {1, -2, 1}};
+
+void averageing_smooth(cv::Mat src, cv::Mat dst);
+void filter_smooth(cv::Mat src, cv::Mat dst, short filter[3][3], int type);
+
 int main(int argc, char **argv) {
-  namedWindow(window_name, WINDOW_AUTOSIZE);
-
-  /// Load the source image
-  const char *filename = argc >= 2 ? argv[1] : "../data/lena.jpg";
-
-  src = imread(filename, IMREAD_COLOR);
+  cv::Mat src;
+  cv::String imageName("../data/lena.jpg"); // by default
+  if (argc > 1) {
+    imageName = argv[1];
+  }
+  src = imread(imageName, cv::IMREAD_COLOR);
   if (src.empty()) {
-    printf(" Error opening image\n");
-    printf(" Usage: ./Smoothing [image_name -- default ../data/lena.jpg] \n");
+    std::cerr << "Error opening file\n\n";
     return -1;
   }
+  cv::Mat dst = cv::Mat::zeros(src.size(), src.type());
+  double elapsed_smooth = read_timer();
+  averageing_smooth(src, dst);
+  elapsed_smooth = (read_timer() - elapsed_smooth);
 
-  if (display_caption("Original Image") != 0) {
-    return 0;
-  }
+  printf("=================================================================\n");
+  printf("Calculating histogram for image\n");
+  printf("-----------------------------------------------------------------\n");
+  printf("averageing smoothing:\t\t\t\t%4f\n", elapsed_smooth * 1.0e3);
 
-  dst = src.clone();
-  if (display_dst(DELAY_CAPTION) != 0) {
-    return 0;
-  }
-
-  /// Applying Homogeneous blur
-  if (display_caption("Homogeneous Blur") != 0) {
-    return 0;
-  }
-
-  //![blur]
-  for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2) {
-    blur(src, dst, Size(i, i), Point(-1, -1));
-    if (display_dst(DELAY_BLUR) != 0) {
-      return 0;
-    }
-  }
-  //![blur]
-
-  /// Applying Gaussian blur
-  if (display_caption("Gaussian Blur") != 0) {
-    return 0;
-  }
-
-  //![gaussianblur]
-  for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2) {
-    GaussianBlur(src, dst, Size(i, i), 0, 0);
-    if (display_dst(DELAY_BLUR) != 0) {
-      return 0;
-    }
-  }
-  //![gaussianblur]
-
-  /// Applying Median blur
-  if (display_caption("Median Blur") != 0) {
-    return 0;
-  }
-
-  //![medianblur]
-  for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2) {
-    medianBlur(src, dst, i);
-    if (display_dst(DELAY_BLUR) != 0) {
-      return 0;
-    }
-  }
-  //![medianblur]
-
-  /// Applying Bilateral Filter
-  if (display_caption("Bilateral Blur") != 0) {
-    return 0;
-  }
-
-  //![bilateralfilter]
-  for (int i = 1; i < MAX_KERNEL_LENGTH; i = i + 2) {
-    bilateralFilter(src, dst, i, i * 2, i / 2);
-    if (display_dst(DELAY_BLUR) != 0) {
-      return 0;
-    }
-  }
-  //![bilateralfilter]
-
-  /// Done
-  display_caption("Done!");
+  filter_smooth(src, dst, lpf_filter_32, 32);
+  namedWindow("Original Image", cv::WINDOW_AUTOSIZE);
+  namedWindow("New Image", cv::WINDOW_AUTOSIZE);
+  imshow("Original Image", src);
+  imshow("New Image", dst);
+  cv::waitKey(0);
 
   return 0;
 }
 
-/**
- * @function display_caption
- */
-int display_caption(const char *caption) {
-  dst = Mat::zeros(src.size(), src.type());
-  putText(dst, caption, Point(src.cols / 4, src.rows / 2), FONT_HERSHEY_COMPLEX,
-          1, Scalar(255, 255, 255));
+void averageing_smooth(cv::Mat src, cv::Mat dst) {
 
-  return display_dst(DELAY_CAPTION);
+  for (int j = 1; j < src.rows - 1; j++) {
+    for (int i = 1; i < src.cols - 1; i++) {
+      unsigned int value[3];
+      for (int x = 0; x < 3; x++) {
+        // previous pixel
+        value[x] = src.at<cv::Vec3b>(j - 1, i - 1)[x];
+        // current pixel
+        value[x] += src.at<cv::Vec3b>(j, i)[x];
+        // next pixel
+        value[x] += src.at<cv::Vec3b>(j + 1, i + 1)[x];
+        // take average
+        value[x] /= 3.0;
+
+        dst.at<cv::Vec3b>(j, i)[x] = value[x];
+      }
+    }
+  }
 }
 
-/**
- * @function display_dst
- */
-int display_dst(int delay) {
-  imshow(window_name, dst);
-  int c = waitKey(delay);
-  if (c >= 0) {
-    return -1;
+void filter_smooth(cv::Mat src, cv::Mat dst, short filter[3][3], int type) {
+  const int MAX_COLOR = 255;
+  for (int j = 1; j < src.rows - 1; j++) {
+    for (int i = 1; i < src.cols - 1; i++) {
+      unsigned int value[3];
+      for (int x = 0; x < 3; x++) {
+        for (int a = -1; a < 2; a++)
+          for (int b = -1; b < 2; b++)
+            value[x] +=
+                src.at<cv::Vec3b>(j + b, i + a)[x] * filter[a + 1][b + 1];
+
+        value[x] /= type;
+        value[x] = ((value[x] < 0) ? 0 : value[x]);
+        value[x] = ((value[x] > MAX_COLOR) ? MAX_COLOR : value[x]);
+
+        dst.at<cv::Vec3b>(j, i)[x] = value[x];
+      }
+    }
   }
-  return 0;
 }

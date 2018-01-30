@@ -22,6 +22,9 @@ target_link_libraries( DisplayImage ${OpenCV_LIBS} )
 add_executable( Smoothing Smoothing.cpp )
 target_link_libraries( Smoothing ${OpenCV_LIBS} )
 
+add_executable( Smoothing_demo Smoothing_demo.cpp )
+target_link_libraries( Smoothing_demo ${OpenCV_LIBS} )
+
 add_executable( ContractBrightness ContractBrightness.cpp )
 target_link_libraries( ContractBrightness ${OpenCV_LIBS} )
 
