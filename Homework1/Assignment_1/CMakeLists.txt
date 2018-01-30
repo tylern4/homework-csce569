@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 project( OpenCVExample )
 
-set(CMAKE_VERBOSE_MAKEFILE ON)
+#set(CMAKE_VERBOSE_MAKEFILE ON)
 
 find_package(OpenMP)
 if (OPENMP_FOUND)
