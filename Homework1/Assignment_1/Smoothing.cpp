@@ -41,7 +41,7 @@ void filter_smooth(cv::Mat src, cv::Mat dst, short filter[3][3], int type);
 
 int main(int argc, char **argv) {
   cv::Mat src;
-  cv::String imageName("../data/lena.jpg"); // by default
+  cv::String imageName("lena.jpg"); // by default
   if (argc > 1) {
     imageName = argv[1];
   }
@@ -76,14 +76,15 @@ void averageing_smooth(cv::Mat src, cv::Mat dst) {
     for (int i = 1; i < src.cols - 1; i++) {
       unsigned int value[3];
       for (int x = 0; x < 3; x++) {
-        // previous pixel
-        value[x] = src.at<cv::Vec3b>(j - 1, i - 1)[x];
-        // current pixel
         value[x] += src.at<cv::Vec3b>(j, i)[x];
-        // next pixel
-        value[x] += src.at<cv::Vec3b>(j + 1, i + 1)[x];
+        value[x] = src.at<cv::Vec3b>(j - 1, i - 1)[x];
+        value[x] += src.at<cv::Vec3b>(j + 1, i + 1)[x]; 
+	value[x] += src.at<cv::Vec3b>(j, i + 1)[x];
+        value[x] += src.at<cv::Vec3b>(j + 1, i)[x];
+        value[x] += src.at<cv::Vec3b>(j - 1 , i)[x];
+        value[x] += src.at<cv::Vec3b>(j, i - 1)[x];
         // take average
-        value[x] /= 3.0;
+        value[x] /= 7.0;
 
         dst.at<cv::Vec3b>(j, i)[x] = value[x];
       }
