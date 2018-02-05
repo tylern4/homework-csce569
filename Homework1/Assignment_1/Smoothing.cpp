@@ -60,7 +60,8 @@ int main(int argc, char **argv) {
   printf("-----------------------------------------------------------------\n");
   printf("averageing smoothing:\t\t\t\t%4f\n", elapsed_smooth * 1.0e3);
 
-  filter_smooth(src, dst, lpf_filter_32, 32);
+  filter_smooth(src, dst, lpf_filter_9, 32);
+  averageing_smooth(src, dst);
   namedWindow("Original Image", cv::WINDOW_AUTOSIZE);
   namedWindow("New Image", cv::WINDOW_AUTOSIZE);
   imshow("Original Image", src);
@@ -71,21 +72,25 @@ int main(int argc, char **argv) {
 }
 
 void averageing_smooth(cv::Mat src, cv::Mat dst) {
-
+  // Loop over rows
   for (int j = 1; j < src.rows - 1; j++) {
+    // Loop over columns
     for (int i = 1; i < src.cols - 1; i++) {
-      unsigned int value[3];
+      unsigned int value[3] = {0};
+      // Loop over colors
       for (int x = 0; x < 3; x++) {
-        value[x] += src.at<cv::Vec3b>(j, i)[x];
-        value[x] = src.at<cv::Vec3b>(j - 1, i - 1)[x];
-        value[x] += src.at<cv::Vec3b>(j + 1, i + 1)[x]; 
-	value[x] += src.at<cv::Vec3b>(j, i + 1)[x];
-        value[x] += src.at<cv::Vec3b>(j + 1, i)[x];
-        value[x] += src.at<cv::Vec3b>(j - 1 , i)[x];
-        value[x] += src.at<cv::Vec3b>(j, i - 1)[x];
-        // take average
-        value[x] /= 7.0;
+        /* Loop over -1,0,1 to get all pixels around
+        the desired pixel [0,0]
+        [-1,-1][0,-1][1,-1]
+        [-1,0][0,0][1,0]
+        [-1,1][0,1][1,1]
+        */
+        for (int a = -1; a <= 1; a++)
+          for (int b = -1; b <= 1; b++)
+            value[x] += src.at<cv::Vec3b>(j + a, i + b)[x];
 
+        // take average
+        value[x] /= 9;
         dst.at<cv::Vec3b>(j, i)[x] = value[x];
       }
     }
