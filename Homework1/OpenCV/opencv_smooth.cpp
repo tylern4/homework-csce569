@@ -85,22 +85,10 @@ void averageing_smooth(cv::Mat src, cv::Mat dst) {
         [-1,0][0,0][1,0]
         [-1,1][0,1][1,1]
         */
-
         for (int a = -1; a <= 1; a++)
           for (int b = -1; b <= 1; b++)
             value[x] += src.at<cv::Vec3b>(j + a, i + b)[x];
 
-        /* loop unrolled
-        value[x] += src.at<cv::Vec3b>(j - 1, i - 1)[x];
-        value[x] += src.at<cv::Vec3b>(j, i - 1)[x];
-        value[x] += src.at<cv::Vec3b>(j + 1, i - 1)[x];
-        value[x] += src.at<cv::Vec3b>(j - 1, i)[x];
-        value[x] += src.at<cv::Vec3b>(j, i)[x];
-        value[x] += src.at<cv::Vec3b>(j + 1, i)[x];
-        value[x] += src.at<cv::Vec3b>(j - 1, i + 1)[x];
-        value[x] += src.at<cv::Vec3b>(j, i + 1)[x];
-        value[x] += src.at<cv::Vec3b>(j + 1, i + 1)[x];
-        */
         // take average
         value[x] /= 9;
         dst.at<cv::Vec3b>(j, i)[x] = value[x];
