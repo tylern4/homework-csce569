@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 2.8)
 project( OpenCVExample )
 
-set(CMAKE_VERBOSE_MAKEFILE ON)
+#set(CMAKE_VERBOSE_MAKEFILE ON)
 
 find_package(OpenMP)
 if (OPENMP_FOUND)
@@ -21,6 +21,9 @@ target_link_libraries( DisplayImage ${OpenCV_LIBS} )
 
 add_executable( Smoothing Smoothing.cpp )
 target_link_libraries( Smoothing ${OpenCV_LIBS} )
+
+add_executable( Smoothing_demo Smoothing_demo.cpp )
+target_link_libraries( Smoothing_demo ${OpenCV_LIBS} )
 
 add_executable( ContractBrightness ContractBrightness.cpp )
 target_link_libraries( ContractBrightness ${OpenCV_LIBS} )

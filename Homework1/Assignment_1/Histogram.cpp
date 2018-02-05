@@ -75,8 +75,8 @@ int main(int argc, char **argv) {
   cv::Mat histImage(hist_h, hist_w, CV_8UC3, cv::Scalar(0, 0, 0));
   for (int i = 1; i < histSize; i++) {
     line(histImage,
-         cv::Point(bin_w * (i - 1), hist_h - hist_h * histogram_blue[i - 1]),
-         cv::Point(bin_w * (i), hist_h - hist_h * histogram_blue[i]),
+         cv::Point(bin_w * (i - 1), hist_h *(1-histogram_blue[i - 1])),
+         cv::Point(bin_w * (i), hist_h *( 1- histogram_blue[i])),
          cv::Scalar(255, 0, 0), 2, 8, 0);
     line(histImage,
          cv::Point(bin_w * (i - 1), hist_h - hist_h * histogram_green[i - 1]),
