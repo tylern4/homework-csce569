@@ -7,9 +7,10 @@ OPENCV_FLAGS = $(shell pkg-config --cflags opencv-3.2.0-dev)
 OPENCV_LINK = $(shell pkg-config --libs opencv-3.2.0-dev)
 endif
 
-CCFLAGS = -O0 -w -g $(OPENCV_FLAGS)
+CCFLAGS = -O3 -w -g $(OPENCV_FLAGS)
 LINKS = -lm $(OPENCV_LINK)
 PROG = $(patsubst %.cpp,%,$(wildcard *.cpp))
+PROG = opencv_smooth opencv_hist
 
 .PHONY: all clean
 
