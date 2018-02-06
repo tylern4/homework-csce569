@@ -141,6 +141,48 @@ temp += A[i * N + j] * B[j];
 temp += A[j * N + i] * B[j];
 \end{lstlisting}
 
+\pagebreak
+\section*{Performance}
+All performance results are from my personal computer running Ubuntu 17.10, Artful, with 16GB of ram and the following cpu configuration.
+
+\begin{verbatim}
+Architecture:        x86_64
+CPU op-mode(s):      32-bit, 64-bit
+Byte Order:          Little Endian
+CPU(s):              8
+On-line CPU(s) list: 0-7
+Thread(s) per core:  2
+Core(s) per socket:  4
+Socket(s):           1
+NUMA node(s):        1
+Vendor ID:           GenuineIntel
+CPU family:          6
+Model:               58
+Model name:          Intel(R) Core(TM) i7-3770 CPU @ 3.40GHz
+Stepping:            9
+CPU MHz:             3400.264
+CPU max MHz:         3900.0000
+CPU min MHz:         1600.0000
+BogoMIPS:            6800.52
+Virtualization:      VT-x
+L1d cache:           32K
+L1i cache:           32K
+L2 cache:            256K
+L3 cache:            8192K
+NUMA node0 CPU(s):   0-7
+\end{verbatim}
+
+The programs for Matrix Matrix and Matrix Vector multiplication were tested both with and without gcc optimization's. With gcc optimization's enabled (-O3) the compiler will attempt to optimize the executable for speed. There are many flags which are enabled with optimization but most likely one of the optimization's involving loop unraveling or vectorization are what helps to speed up the results. All the information on what the optimization and all the flags enabled was found at the \href{https://gcc.gnu.org/onlinedocs/gcc/Optimize-Options.html}{online gcc optimization manual}.
+
+The performance for matrix multiplication can be seen in the following graph. The worst performance came from A column major and B row major at 2048 with no optimization, and even with optimization's enabled it was not fast in it's execution time. However storing the matrices as column major gives the best performance, it is the fastest method both with and without optimization's enabled.
+\begin{center}
+    \includegraphics[scale=0.5]{mm.png} \\
+\end{center}
+
+With matrix vector multiplication the row major matrix is faster than both implementations of the optimized column major matrix. This probably comes from the fact that by doing row major element searches in both the matrix and vector are continuous instead of having to access elements out of order.
+\begin{center}
+    \includegraphics[scale=0.5]{mv.png} \\
+\end{center}
 
 
 \end{document}
