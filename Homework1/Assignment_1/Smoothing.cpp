@@ -37,11 +37,11 @@ short hpf_filter_2[3][3] = {{-1, -1, -1}, {-1, 9, -1}, {-1, -1, -1}};
 short hpf_filter_3[3][3] = {{1, -2, 1}, {-2, 5, -2}, {1, -2, 1}};
 
 void averageing_smooth(cv::Mat src, cv::Mat dst);
-void filter_smooth(cv::Mat src, cv::Mat dst, short filter[3][3], int type);
+void filter_smooth(cv::Mat src, cv::Mat dst, short filter[3][3]);
 
 int main(int argc, char **argv) {
   cv::Mat src;
-  cv::String imageName("lena.jpg"); // by default
+  cv::String imageName("../data/lena.jpg"); // by default
   if (argc > 1) {
     imageName = argv[1];
   }
@@ -60,11 +60,10 @@ int main(int argc, char **argv) {
   printf("-----------------------------------------------------------------\n");
   printf("averageing smoothing:\t\t\t\t%4f\n", elapsed_smooth * 1.0e3);
 
-  filter_smooth(src, dst, lpf_filter_9, 32);
-  averageing_smooth(src, dst);
+  filter_smooth(src, dst, lpf_filter_9);
   namedWindow("Original Image", cv::WINDOW_AUTOSIZE);
-  namedWindow("New Image", cv::WINDOW_AUTOSIZE);
   imshow("Original Image", src);
+  namedWindow("New Image", cv::WINDOW_AUTOSIZE);
   imshow("New Image", dst);
   cv::waitKey(0);
 
@@ -97,18 +96,26 @@ void averageing_smooth(cv::Mat src, cv::Mat dst) {
   }
 }
 
-void filter_smooth(cv::Mat src, cv::Mat dst, short filter[3][3], int type) {
+void filter_smooth(cv::Mat src, cv::Mat dst, short filter[3][3]) {
   const int MAX_COLOR = 255;
+  int factor = 0;
+  for (int a = -1; a < 2; a++) {
+    for (int b = -1; b < 2; b++) {
+      factor += filter[a + 1][b + 1];
+    }
+  }
   for (int j = 1; j < src.rows - 1; j++) {
     for (int i = 1; i < src.cols - 1; i++) {
       unsigned int value[3];
       for (int x = 0; x < 3; x++) {
-        for (int a = -1; a < 2; a++)
-          for (int b = -1; b < 2; b++)
+        for (int a = -1; a < 2; a++) {
+          for (int b = -1; b < 2; b++) {
             value[x] +=
                 src.at<cv::Vec3b>(j + b, i + a)[x] * filter[a + 1][b + 1];
+          }
+        }
 
-        value[x] /= type;
+        value[x] /= factor;
         value[x] = ((value[x] < 0) ? 0 : value[x]);
         value[x] = ((value[x] > MAX_COLOR) ? MAX_COLOR : value[x]);
 
