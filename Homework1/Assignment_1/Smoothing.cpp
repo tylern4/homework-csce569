@@ -77,28 +77,31 @@ void filter_smooth(cv::Mat src, cv::Mat dst, short filter[3][3]) {
       weight += filter[a + 1][b + 1];
     }
   }
-  for (int j = 1; j < src.rows - 1; j++) {
-    for (int i = 1; i < src.cols - 1; i++) {
-      unsigned int value[3];
-      for (int x = 0; x < 3; x++) {
+
+  for (int j = 1; j < src.rows - 1; j++) {   // Loop over rows
+    for (int i = 1; i < src.cols - 1; i++) { // Loop over cols
+      unsigned int value[3];        // Setup temporary value for new pixels
+      for (int x = 0; x < 3; x++) { // Loop over pixels blue, green, red
         /* Loop over -1,0,1 to get all pixels around
         the desired pixel [0,0]
         [-1,-1][0,-1][1,-1]
         [-1,0][0,0][1,0]
         [-1,1][0,1][1,1]
         */
-        for (int a = -1; a < 2; a++) {
+        for (int a = -1; a < 2; a++) { // Per-mutate over the filter matrix
           for (int b = -1; b < 2; b++) {
+            // Store temporary value as current/surrounding pixels times filter
             value[x] +=
                 src.at<cv::Vec3b>(j + b, i + a)[x] * filter[a + 1][b + 1];
           }
         }
-
-        value[x] /= weight;
+        value[x] /= weight; // Take the average knowing the weight of filter
+        // If the value is negative place a 0, if it is too large place largest
+        // pixel value (265)
         value[x] = ((value[x] < 0) ? 0 : value[x]);
         value[x] = ((value[x] > MAX_COLOR) ? MAX_COLOR : value[x]);
-
-        dst.at<cv::Vec3b>(j, i)[x] = value[x];
+        dst.at<cv::Vec3b>(j, i)[x] =
+            value[x]; // Place into proper value of new image
       }
     }
   }

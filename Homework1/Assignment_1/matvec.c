@@ -88,12 +88,12 @@ int main(int argc, char *argv[]) {
 void mv(int N, int M, REAL *A, REAL *B, REAL *C, int A_rowMajor) {
   int i, j;
   if (A_rowMajor > 0) {
-    for (i = 0; i < M; i++) {
-      REAL temp = 0.0;
-      for (j = 0; j < N; j++) {
-        temp += A[i * N + j] * B[j];
+    for (i = 0; i < M; i++) {        // Loop over rows
+      REAL temp = 0.0;               // Create temp to for new element
+      for (j = 0; j < N; j++) {      // Loop over cols
+        temp += A[i * N + j] * B[j]; // Add the product of elements
       }
-      C[i] = temp;
+      C[i] = temp; // Put element into output vector
     }
   } else if (A_rowMajor == 0) {
     for (i = 0; i < M; i++) {

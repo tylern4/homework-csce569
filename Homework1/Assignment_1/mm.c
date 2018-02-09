@@ -114,43 +114,42 @@ void mm(int N, int K, int M, REAL *A, REAL *B, REAL *C, int A_rowMajor,
   int i, j, w;
   // Both rowmajor
   if (A_rowMajor > 0 && B_rowMajor > 0) {
-    for (i = 0; i < N; i++)
-      for (j = 0; j < M; j++) {
-        REAL temp = 0.0;
-        for (w = 0; w < K; w++)
-          temp += A[i * K + w] * B[w * M + j];
-        C[i * M + j] = temp;
+    for (i = 0; i < N; i++) {                  // Loop over cols
+      for (j = 0; j < M; j++) {                // Loop over rows
+        REAL temp = 0.0;                       // Create temp to for new element
+        for (w = 0; w < K; w++)                // Walk through the row/column
+          temp += A[i * K + w] * B[w * M + j]; // Add the product of elements
+        C[i * M + j] = temp;                   // Put element into output matrix
       }
+    }
+    // A columbmajor B rowmajor
+    else if (A_rowMajor == 0 && B_rowMajor > 0) {
+      for (i = 0; i < N; i++)
+        for (j = 0; j < M; j++) {
+          REAL temp = 0.0;
+          for (w = 0; w < K; w++)
+            temp += A[w * K + i] * B[w * M + j];
+          C[i * M + j] = temp;
+        }
+    }
+    // A rowmajor B columbmajor
+    else if (A_rowMajor > 0 && B_rowMajor == 0) {
+      for (i = 0; i < N; i++)
+        for (j = 0; j < M; j++) {
+          REAL temp = 0.0;
+          for (w = 0; w < K; w++)
+            temp += A[w * K + i] * B[j * M + w];
+          C[i * M + j] = temp;
+        }
+    }
+    // Both columbmajor
+    else if (A_rowMajor == 0 && B_rowMajor == 0) {
+      for (i = 0; i < N; i++)
+        for (j = 0; j < M; j++) {
+          REAL temp = 0.0;
+          for (w = 0; w < K; w++)
+            temp += A[i * K + w] * B[j * M + w];
+          C[i * M + j] = temp;
+        }
+    }
   }
-  // A columbmajor B rowmajor
-  else if (A_rowMajor == 0 && B_rowMajor > 0) {
-    for (i = 0; i < N; i++)
-      for (j = 0; j < M; j++) {
-        REAL temp = 0.0;
-        for (w = 0; w < K; w++)
-          temp += A[w * K + i] * B[w * M + j];
-        C[i * M + j] = temp;
-      }
-  }
-  // A rowmajor B columbmajor
-  else if (A_rowMajor > 0 && B_rowMajor == 0) {
-    for (i = 0; i < N; i++)
-      for (j = 0; j < M; j++) {
-        REAL temp = 0.0;
-        for (w = 0; w < K; w++)
-          temp += A[w * K + i] * B[j * M + w];
-        C[i * M + j] = temp;
-      }
-  }
-  // Both columbmajor
-  // ???
-  else if (A_rowMajor == 0 && B_rowMajor == 0) {
-    for (i = 0; i < N; i++)
-      for (j = 0; j < M; j++) {
-        REAL temp = 0.0;
-        for (w = 0; w < K; w++)
-          temp += A[i * K + w] * B[j * M + w];
-        C[i * M + j] = temp;
-      }
-  }
-}

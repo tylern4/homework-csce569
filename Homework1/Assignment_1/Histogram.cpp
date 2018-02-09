@@ -83,10 +83,10 @@ void normalize_hist(float histogram[256]) {
 
 void my_hist(cv::Mat src, float histogram[256]) {
   int k;
-  for (int i = 0; i < src.cols; i++) {
-    for (int j = 0; j < src.rows; j++) {
-      k = src.at<uchar>(j, i);
-      histogram[k] += 1;
+  for (int i = 0; i < src.cols; i++) {   // Loop over cols
+    for (int j = 0; j < src.rows; j++) { // Loop over rows
+      k = src.at<uchar>(j, i);           // Get current value
+      histogram[k] += 1;                 // Add one to the histogram
     }
   }
   normalize_hist(histogram);
