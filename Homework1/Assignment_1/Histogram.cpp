@@ -43,24 +43,28 @@ int main(int argc, char **argv) {
   cv::Mat bgr[3];
   split(src, bgr);
 
-  double elapsed_my_blue = read_timer();
+  double elapsed_blue = read_timer();
   my_hist(bgr[0], histogram_blue);
-  elapsed_my_blue = (read_timer() - elapsed_my_blue);
+  elapsed_blue = (read_timer() - elapsed_blue);
 
-  double elapsed_my_green = read_timer();
+  double elapsed_green = read_timer();
   my_hist(bgr[1], histogram_green);
-  elapsed_my_green = (read_timer() - elapsed_my_green);
+  elapsed_green = (read_timer() - elapsed_green);
 
-  double elapsed_my_red = read_timer();
+  double elapsed_red = read_timer();
   my_hist(bgr[2], histogram_red);
-  elapsed_my_red = (read_timer() - elapsed_my_red);
+  elapsed_red = (read_timer() - elapsed_red);
 
   printf("=================================================================\n");
   printf("Calculating histogram for image\n");
   printf("-----------------------------------------------------------------\n");
-  printf("blue:\t\t\t\t%4f\n", elapsed_my_blue * 1.0e3);
-  printf("green:\t\t\t\t%4f\n", elapsed_my_green * 1.0e3);
-  printf("red:\t\t\t\t%4f\n", elapsed_my_red * 1.0e3);
+  printf("blue:\t\t\t\t%4f\n", elapsed_blue * 1.0e3);
+  printf("green:\t\t\t\t%4f\n", elapsed_green * 1.0e3);
+  printf("red:\t\t\t\t%4f\n", elapsed_red * 1.0e3);
+  double elapsed = elapsed_blue + elapsed_green + elapsed_red;
+  printf("\t\tTime (ms)\t\tMegaflops\n");
+  printf("Total:\t\t%4f\t\t%4f\n", elapsed * 1.0e3,
+         (src.rows * src.cols * 3) / (elapsed * 1.0e6));
 
   show_hist(histogram_blue, histogram_green, histogram_red);
   return 0;
