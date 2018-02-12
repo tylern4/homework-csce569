@@ -16,4 +16,4 @@ fast:
 	/opt/intel/bin/icc -fast -xSSE4.2 -m64 $(CCFLAGS) -o $@_fast $< $(LINKS)
 
 clean:
-	rm -f mm_0 mm_3 matvec_0 matvec_3 matvec_fast mm_fast
+	rm -f mm_0 mm_3 matvec_0 matvec_3 jacobi_0 jacobi_3
