@@ -1,10 +1,10 @@
 CC = g++
-ifeq ($(shell hostname), workstation)
-OPENCV_FLAGS = $(shell pkg-config --cflags opencv)
-OPENCV_LINK = $(shell pkg-config --libs opencv) -fopenmp
-else
+ifeq ($(shell hostname), cocsce-l3d22-04)
 OPENCV_FLAGS = $(shell pkg-config --cflags opencv-3.2.0-dev)
 OPENCV_LINK = $(shell pkg-config --libs opencv-3.2.0-dev) -fopenmp
+else
+OPENCV_FLAGS = $(shell pkg-config --cflags opencv)
+OPENCV_LINK = $(shell pkg-config --libs opencv) -fopenmp
 endif
 
 CCFLAGS = -O3 -w -g $(OPENCV_FLAGS)
