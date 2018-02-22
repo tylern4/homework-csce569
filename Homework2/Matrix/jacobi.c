@@ -4,6 +4,8 @@
 #include <math.h>
 #include <omp.h>
 #include <sys/timeb.h>
+#include <sys/timeb.h>
+
 #define REAL float
 
 /* compile the program using the following command
@@ -126,10 +128,12 @@ double error_check(long n, long m, REAL alpha, REAL dx, REAL dy, REAL *u_p,
   error = (sqrt(error) / (n * m));
   return error;
 }
+
 void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL relax,
                 REAL *u_p, REAL *f_p, REAL tol, int mits);
 void jacobi_omp(long n, long m, REAL dx, REAL dy, REAL alpha, REAL relax,
                 REAL *u_p, REAL *f_p, REAL tol, int mits);
+
 int num_threads = 4;
 
 int main(int argc, char *argv[]) {
@@ -191,8 +195,8 @@ int main(int argc, char *argv[]) {
     /* the rest of arg ignored */
   }
   printf("jacobi %ld %ld %g %g %g %d\n", n, m, alpha, tol, relax, mits);
-  printf("---------------------------------------------------------------------"
-         "---------------------------------\n");
+  printf("---------------------------------------------------------\n");
+
   /** init the array */
 
   REAL *u = (REAL *)malloc(sizeof(REAL) * n * m);
@@ -209,8 +213,8 @@ int main(int argc, char *argv[]) {
   memcpy(uomp, u, n * m * sizeof(REAL));
   memcpy(fomp, f, n * m * sizeof(REAL));
 
-  printf("================================= Sequential Execution "
-         "======================================\n");
+  printf("=============== Sequential Execution ====================\n");
+
   double elapsed_seq = read_timer_ms();
   jacobi_seq(n, m, dx, dy, alpha, relax, u, f, tol, mits);
   elapsed_seq = read_timer_ms() - elapsed_seq;
@@ -220,9 +224,10 @@ int main(int argc, char *argv[]) {
 #pragma omp master
   num_threads = omp_get_num_threads();
 
-  printf("================================= Parallel OpenMP Execution (%d "
-         "threads) ======================================\n",
+  printf("=============== Parallel OpenMP Execution (%d threads) "
+         "===============\n",
          num_threads);
+
   double elapsed_omp = read_timer_ms();
   jacobi_omp(n, m, dx, dy, alpha, relax, uomp, fomp, tol, mits);
   elapsed_omp = read_timer_ms() - elapsed_omp;
@@ -234,11 +239,10 @@ int main(int argc, char *argv[]) {
 #endif
 
   double flops = mits * (n - 2) * (m - 2) * 13;
-  printf("---------------------------------------------------------------------"
-         "---------------------------------\n");
+
+  printf("---------------------------------------------------------\n");
   printf("Performance:\tRuntime(ms)\tMFLOPS\t\tError\n");
-  printf("---------------------------------------------------------------------"
-         "---------------------------------\n");
+  printf("---------------------------------------------------------\n");
   printf("base:\t\t%.2f\t\t%.2f\t\t%g\n", elapsed_seq,
          flops / (1.0e3 * elapsed_seq), error_check(n, m, alpha, dx, dy, u, f));
   printf("omp(%d threads):\t%.2f\t\t%.2f\t\t%g\n", num_threads, elapsed_omp,
@@ -275,6 +279,7 @@ int main(int argc, char *argv[]) {
  *****************************************************************/
 void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
                 REAL *u_p, REAL *f_p, REAL tol, int mits) {
+
   long i, j, k;
   REAL error;
   REAL ax;
@@ -314,6 +319,7 @@ void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
         error = error + resid * resid;
       }
     /* Error check */
+
     if (k % 500 == 0)
       printf("Finished %ld iteration with error: %g\n", k, error);
     error = sqrt(error) / (n * m);
@@ -326,6 +332,7 @@ void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
 
 void jacobi_omp(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
                 REAL *u_p, REAL *f_p, REAL tol, int mits) {
+
   long i, j, k;
   REAL error;
   REAL ax;
@@ -368,6 +375,7 @@ void jacobi_omp(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
     /* Error check */
     if (k % 500 == 0)
       printf("Finished %ld iteration with error: %g\n", k, error);
+
     error = sqrt(error) / (n * m);
     k = k + 1;
   } /*  End iteration loop */
