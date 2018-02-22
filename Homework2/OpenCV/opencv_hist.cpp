@@ -1,6 +1,7 @@
 #include "opencv2/highgui.hpp"
 #include "opencv2/imgcodecs.hpp"
 #include "opencv2/imgproc.hpp"
+#include "omp.h"
 #include <iostream>
 #include <sys/timeb.h>
 
@@ -20,15 +21,21 @@ double read_timer_ms() {
   return (double)tm.time * 1000.0 + (double)tm.millitm;
 }
 
-void normalize_hist(float histogram[256]);
-void my_hist(cv::Mat src, float histogram[256]);
+void normalize(float histogram[256]);
+void hist(cv::Mat src, float histogram[256]);
+void normalize_omp(float histogram[256]);
+void hist_omp(cv::Mat src, float histogram[256]);
 void show_hist(float b[256], float g[256], float r[256]);
 
 int main(int argc, char **argv) {
   cv::Mat src;
   cv::String imageName("../data/lena.jpg"); // by default
-  if (argc > 1) {
+  bool batch = true;
+  if (argc == 2) {
     imageName = argv[1];
+  } else if (argc > 2) {
+    batch = false;
+    imageName = argv[2];
   }
   src = imread(imageName, cv::IMREAD_COLOR);
   if (src.empty()) {
@@ -40,56 +47,57 @@ int main(int argc, char **argv) {
   float histogram_green[256] = {0};
   float histogram_red[256] = {0};
 
+  float omp_blue[256] = {0};
+  float omp_green[256] = {0};
+  float omp_red[256] = {0};
+
   cv::Mat bgr[3];
   split(src, bgr);
 
-  double elapsed = read_timer();
-  //#pragma omp parallel
-  //  {
-  //#pragma omp task
-  my_hist(bgr[2], histogram_red);
-  //#pragma omp task
-  my_hist(bgr[1], histogram_green);
-  //#pragma omp task
-  my_hist(bgr[0], histogram_blue);
-  //  }
+  double elapsed_seq = read_timer();
+  hist(bgr[2], histogram_red);
+  hist(bgr[1], histogram_green);
+  hist(bgr[0], histogram_blue);
+  elapsed_seq = (read_timer() - elapsed_seq);
 
-  elapsed = (read_timer() - elapsed);
+  double elapsed_omp = read_timer();
+  hist_omp(bgr[2], omp_red);
+  hist_omp(bgr[1], omp_green);
+  hist_omp(bgr[0], omp_blue);
+  elapsed_omp = (read_timer() - elapsed_omp);
 
   printf("=================================================================\n");
   printf("Calculating histogram for image\n");
   printf("-----------------------------------------------------------------\n");
-  printf("hist:\t\t\t\t%4f\n", elapsed * 1.0e3);
   printf("\t\tTime (ms)\t\tMegaflops\n");
-  printf("Total:\t\t%4f\t\t%4f\n", elapsed * 1.0e3,
-         (src.rows * src.cols * 3) / (elapsed * 1.0e6));
+  printf("hist:\t\t%4f", elapsed_seq * 1.0e3);
+  printf("\t\t%4f\n", (src.rows * src.cols * 3) / (elapsed_seq * 1.0e6));
+  printf("hist_omp:\t%4f", elapsed_omp * 1.0e3);
+  printf("\t\t%4f\n", (src.rows * src.cols * 3) / (elapsed_omp * 1.0e6));
 
-  show_hist(histogram_blue, histogram_green, histogram_red);
+  if (!batch)
+    show_hist(omp_blue, omp_green, omp_red);
   return 0;
 }
 
-void normalize_hist(float histogram[256]) {
-  int max = 0;
-
-#pragma omp parallel for reduction(max : max)
+void normalize(float histogram[256]) {
+  int max = histogram[0];
   for (int x = 0; x < 256; x++)
     max = max > histogram[x] ? max : histogram[x];
 
-#pragma omp parallel for schedule(dynamic)
   for (int x = 0; x < 256; x++)
     histogram[x] /= (float)max;
 }
 
-void my_hist(cv::Mat src, float histogram[256]) {
-  int k;
-  //#pragma omp parallel for
+void hist(cv::Mat src, float histogram[256]) {
+  short k;
   for (int i = 0; i < src.cols; i++) {
     for (int j = 0; j < src.rows; j++) {
       k = src.at<uchar>(j, i);
       histogram[k] += 1;
     }
   }
-  normalize_hist(histogram);
+  normalize(histogram);
 }
 
 void show_hist(float b[256], float g[256], float r[256]) {
@@ -112,4 +120,46 @@ void show_hist(float b[256], float g[256], float r[256]) {
   namedWindow("My Hist", cv::WINDOW_AUTOSIZE);
   imshow("My Hist", histImage);
   cv::waitKey(0);
+}
+
+void normalize_omp(float histogram[256]) {
+  int max = 0;
+#pragma omp parallel for reduction(max : max)
+  for (int x = 0; x < 256; x++)
+    max = max > histogram[x] ? max : histogram[x];
+
+#pragma omp parallel for
+  for (int x = 0; x < 256; x++)
+    histogram[x] /= (float)max;
+}
+
+void hist_omp(cv::Mat src, float histogram[256]) {
+  int max_threads = omp_get_max_threads();
+  float temp[256][max_threads];
+
+  short k = 0;
+
+#pragma omp parallel private(k) shared(temp)
+  {
+    int thread = omp_get_thread_num();
+
+// Loop to initiale temp to zero
+#pragma omp parallel for
+    for (int k = 0; k < 256; k++)
+      temp[k][thread] = 0;
+
+#pragma omp parallel for
+    for (int i = 0; i < src.cols; i++) {
+      for (int j = 0; j < src.rows; j++) {
+        k = src.at<uchar>(j, i);
+        temp[k][thread] += 1;
+      }
+    }
+  } // End parallel section
+
+  for (int t = 0; t < max_threads; t++)
+    for (int k = 0; k < 256; k++)
+      histogram[k] += temp[k][t];
+
+  normalize_omp(histogram);
 }
