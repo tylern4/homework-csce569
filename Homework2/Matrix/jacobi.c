@@ -135,6 +135,7 @@ void jacobi_omp(long n, long m, REAL dx, REAL dy, REAL alpha, REAL relax,
                 REAL *u_p, REAL *f_p, REAL tol, int mits);
 
 int num_threads = 4;
+int t = 1;
 
 int main(int argc, char *argv[]) {
   long n = DEFAULT_DIMSIZE;
@@ -226,13 +227,15 @@ int main(int argc, char *argv[]) {
 #pragma omp master
   num_threads = omp_get_num_threads();
 
-  printf("========= Parallel OpenMP Execution (%d threads) =========\n",
-         num_threads);
+  double elapsed_omp[num_threads];
 
-  double elapsed_omp = read_timer_ms();
-  jacobi_omp(n, m, dx, dy, alpha, relax, uomp, fomp, tol, mits);
-  elapsed_omp = read_timer_ms() - elapsed_omp;
-  printf("\n");
+  for (t = 1; t <= num_threads; t++) {
+    printf("========= Parallel OpenMP Execution (%d threads) =========\n", t);
+    elapsed_omp[t] = read_timer_ms();
+    jacobi_omp(n, m, dx, dy, alpha, relax, uomp, fomp, tol, mits);
+    elapsed_omp[t] = read_timer_ms() - elapsed_omp[t];
+    printf("\n");
+  }
 
 #if CORRECTNESS_CHECK
   print_array("Sequential Run", "u", (REAL *)u, n, m);
@@ -246,9 +249,10 @@ int main(int argc, char *argv[]) {
   printf("---------------------------------------------------------\n");
   printf("base:\t\t%.2f\t\t%.2f\t\t%g\n", elapsed_seq,
          flops / (1.0e3 * elapsed_seq), error_check(n, m, alpha, dx, dy, u, f));
-  printf("omp(%d threads):\t%.2f\t\t%.2f\t\t%g\n", num_threads, elapsed_omp,
-         flops / (1.0e3 * elapsed_omp),
-         error_check(n, m, alpha, dx, dy, uomp, fomp));
+  for (int t = 1; t <= num_threads; t++)
+    printf("omp(%d threads):\t%.2f\t\t%.2f\t\t%g\n", t, elapsed_omp[t],
+           flops / (1.0e3 * elapsed_omp[t]),
+           error_check(n, m, alpha, dx, dy, uomp, fomp));
 
   free(u);
   free(f);
@@ -353,6 +357,9 @@ void jacobi_omp(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
   b = (((-2.0 / (dx * dx)) - (2.0 / (dy * dy))) - alpha);
   error = (10.0 * tol);
   k = 1;
+
+  omp_set_dynamic(0);     // Explicitly disable dynamic teams
+  omp_set_num_threads(t); // Use 4 threads for all consecutive parallel regions
 
   while ((k <= mits) && (error > tol)) {
     error = 0.0;
