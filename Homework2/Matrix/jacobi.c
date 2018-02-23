@@ -144,26 +144,27 @@ int main(int argc, char *argv[]) {
   REAL relax = 1.0;
   int mits = 5000;
 
-  fprintf(stderr, "Usage: jacobi [<n> <m> <alpha> <tol> <relax> <mits>]\n");
-  fprintf(stderr, "\tn - grid dimension in x direction, default: %ld\n", n);
-  fprintf(
-      stderr,
-      "\tm - grid dimension in y direction, default: n if provided or %ld\n",
-      m);
-  fprintf(
-      stderr,
-      "\talpha - Helmholtz constant (always greater than 0.0), default: %g\n",
-      alpha);
-  fprintf(stderr,
-          "\ttol   - error tolerance for iterative solver, default: %g\n", tol);
-  fprintf(stderr,
-          "\trelax - Successice over relaxation parameter, default: %g\n",
-          relax);
-  fprintf(stderr,
-          "\tmits  - Maximum iterations for iterative solver, default: %d\n",
-          mits);
-
-  if (argc == 2) {
+  if (argc < 2) {
+    fprintf(stderr, "Usage: jacobi [<n> <m> <alpha> <tol> <relax> <mits>]\n");
+    fprintf(stderr, "\tn - grid dimension in x direction, default: %ld\n", n);
+    fprintf(
+        stderr,
+        "\tm - grid dimension in y direction, default: n if provided or %ld\n",
+        m);
+    fprintf(
+        stderr,
+        "\talpha - Helmholtz constant (always greater than 0.0), default: %g\n",
+        alpha);
+    fprintf(stderr,
+            "\ttol   - error tolerance for iterative solver, default: %g\n",
+            tol);
+    fprintf(stderr,
+            "\trelax - Successice over relaxation parameter, default: %g\n",
+            relax);
+    fprintf(stderr,
+            "\tmits  - Maximum iterations for iterative solver, default: %d\n",
+            mits);
+  } else if (argc == 2) {
     sscanf(argv[1], "%ld", &n);
     m = n;
   } else if (argc == 3) {
@@ -194,6 +195,7 @@ int main(int argc, char *argv[]) {
   } else {
     /* the rest of arg ignored */
   }
+  printf("---------------------------------------------------------\n");
   printf("jacobi %ld %ld %g %g %g %d\n", n, m, alpha, tol, relax, mits);
   printf("---------------------------------------------------------\n");
 
@@ -224,8 +226,7 @@ int main(int argc, char *argv[]) {
 #pragma omp master
   num_threads = omp_get_num_threads();
 
-  printf("=============== Parallel OpenMP Execution (%d threads) "
-         "===============\n",
+  printf("========= Parallel OpenMP Execution (%d threads) =========\n",
          num_threads);
 
   double elapsed_omp = read_timer_ms();
@@ -352,22 +353,24 @@ void jacobi_omp(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
   b = (((-2.0 / (dx * dx)) - (2.0 / (dy * dy))) - alpha);
   error = (10.0 * tol);
   k = 1;
+
   while ((k <= mits) && (error > tol)) {
     error = 0.0;
-
-    /* Copy new solution into old */
+/* Copy new solution into old */
+#pragma omp parallel for private(i, j) collapse(2)
     for (i = 0; i < n; i++)
       for (j = 0; j < m; j++)
         uold[i][j] = u[i][j];
-#pragma omp parallel for
+
+#pragma omp parallel for private(i, j) collapse(2) reduction(+ : error)
     for (i = 1; i < (n - 1); i++)
       for (j = 1; j < (m - 1); j++) {
         resid = (ax * (uold[i - 1][j] + uold[i + 1][j]) +
                  ay * (uold[i][j - 1] + uold[i][j + 1]) + b * uold[i][j] -
                  f[i][j]) /
                 b;
-        // printf("i: %d, j: %d, resid: %f\n", i, j, resid);
 
+        // printf("i: %d, j: %d, resid: %f\n", i, j, resid);
         u[i][j] = uold[i][j] - omega * resid;
         error = error + resid * resid;
       }
@@ -378,7 +381,9 @@ void jacobi_omp(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
 
     error = sqrt(error) / (n * m);
     k = k + 1;
+
   } /*  End iteration loop */
+
   printf("Total Number of Iterations: %ld\n", k);
   printf("Residual: %.15g\n", error);
 }
