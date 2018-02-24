@@ -364,12 +364,13 @@ void jacobi_omp(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
   while ((k <= mits) && (error > tol)) {
     error = 0.0;
 /* Copy new solution into old */
-#pragma omp parallel for private(i, j) collapse(2)
+#pragma omp parallel for private(i, j) shared(u, uold) collapse(2)
     for (i = 0; i < n; i++)
       for (j = 0; j < m; j++)
         uold[i][j] = u[i][j];
 
-#pragma omp parallel for private(i, j) collapse(2) reduction(+ : error)
+#pragma omp parallel for private(i, j) shared(m, n, u, uold) collapse(2)       \
+    reduction(+ : error)
     for (i = 1; i < (n - 1); i++)
       for (j = 1; j < (m - 1); j++) {
         resid = (ax * (uold[i - 1][j] + uold[i + 1][j]) +
@@ -377,7 +378,6 @@ void jacobi_omp(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
                  f[i][j]) /
                 b;
 
-        // printf("i: %d, j: %d, resid: %f\n", i, j, resid);
         u[i][j] = uold[i][j] - omega * resid;
         error = error + resid * resid;
       }

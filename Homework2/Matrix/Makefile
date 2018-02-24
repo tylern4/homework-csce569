@@ -12,8 +12,7 @@ PROG = $(patsubst %.c,%,$(wildcard *.c))
 all: $(PROG)
 
 $(PROG): %: %.c
-	$(CC) -O0 $(CCFLAGS) -o $@_0 $< $(LINKS)
-	$(CC) -O3 $(CCFLAGS) -o $@_3 $< $(LINKS)
+	$(CC) -O3 $(CCFLAGS) -o $@ $< $(LINKS)
 
 clean:
-	rm -f *_0 *_3
+	rm -f $(PROG) 
