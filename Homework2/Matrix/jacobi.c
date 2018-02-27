@@ -228,12 +228,14 @@ int main(int argc, char *argv[]) {
   num_threads = omp_get_num_threads();
 
   double elapsed_omp[num_threads];
+  double error[num_threads];
 
   for (t = 1; t <= num_threads; t++) {
     printf("========= Parallel OpenMP Execution (%d threads) =========\n", t);
     elapsed_omp[t] = read_timer_ms();
     jacobi_omp(n, m, dx, dy, alpha, relax, uomp, fomp, tol, mits);
     elapsed_omp[t] = read_timer_ms() - elapsed_omp[t];
+    error[t] = error_check(n, m, alpha, dx, dy, uomp, fomp);
     printf("\n");
   }
 
@@ -251,8 +253,7 @@ int main(int argc, char *argv[]) {
          flops / (1.0e3 * elapsed_seq), error_check(n, m, alpha, dx, dy, u, f));
   for (int t = 1; t <= num_threads; t++)
     printf("omp(%d threads):\t%.2f\t\t%.2f\t\t%g\n", t, elapsed_omp[t],
-           flops / (1.0e3 * elapsed_omp[t]),
-           error_check(n, m, alpha, dx, dy, uomp, fomp));
+           t * flops / (1.0e3 * elapsed_omp[t]), error[t]);
 
   free(u);
   free(f);
@@ -358,38 +359,46 @@ void jacobi_omp(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
   error = (10.0 * tol);
   k = 1;
 
-  omp_set_dynamic(0);     // Explicitly disable dynamic teams
-  omp_set_num_threads(t); // Use 4 threads for all consecutive parallel regions
+  // omp_set_dynamic(0);     // Explicitly disable dynamic teams
+  // omp_set_num_threads(t); // Use 4 threads for all consecutive parallel
+  // regions
 
+  //#pragma omp parallel num_threads(t) private(i, j, k, tol) shared(m, n, u,
+  // uold)
+  //{
   while ((k <= mits) && (error > tol)) {
     error = 0.0;
+#pragma omp parallel num_threads(t)
+    {
 /* Copy new solution into old */
-#pragma omp parallel for private(i, j) shared(u, uold) collapse(2)
-    for (i = 0; i < n; i++)
-      for (j = 0; j < m; j++)
-        uold[i][j] = u[i][j];
+#pragma omp for private(i, j) collapse(2)
+      for (i = 0; i < n; i++)
+        for (j = 0; j < m; j++)
+          uold[i][j] = u[i][j];
 
-#pragma omp parallel for private(i, j) shared(m, n, u, uold) collapse(2)       \
-    reduction(+ : error)
-    for (i = 1; i < (n - 1); i++)
-      for (j = 1; j < (m - 1); j++) {
-        resid = (ax * (uold[i - 1][j] + uold[i + 1][j]) +
-                 ay * (uold[i][j - 1] + uold[i][j + 1]) + b * uold[i][j] -
-                 f[i][j]) /
-                b;
+#pragma omp for private(i, j) collapse(2) reduction(+ : error)
+      for (i = 1; i < (n - 1); i++)
+        for (j = 1; j < (m - 1); j++) {
+          resid = (ax * (uold[i - 1][j] + uold[i + 1][j]) +
+                   ay * (uold[i][j - 1] + uold[i][j + 1]) + b * uold[i][j] -
+                   f[i][j]) /
+                  b;
 
-        u[i][j] = uold[i][j] - omega * resid;
-        error = error + resid * resid;
+          u[i][j] = uold[i][j] - omega * resid;
+          error = error + resid * resid;
+        }
+
+/* Error check */
+#pragma omp single nowait
+      {
+        if (k % 500 == 0)
+          printf("Finished %ld iteration with error: %g\n", k, error);
+
+        error = sqrt(error) / (n * m);
+        k = k + 1;
       }
-
-    /* Error check */
-    if (k % 500 == 0)
-      printf("Finished %ld iteration with error: %g\n", k, error);
-
-    error = sqrt(error) / (n * m);
-    k = k + 1;
-
-  } /*  End iteration loop */
+    } /*  End iteration loop */
+  }
 
   printf("Total Number of Iterations: %ld\n", k);
   printf("Residual: %.15g\n", error);
