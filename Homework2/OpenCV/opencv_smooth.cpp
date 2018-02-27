@@ -67,13 +67,11 @@ int main(int argc, char **argv) {
   elapsed_omp = (read_timer() - elapsed_omp);
 
   printf("=================================================================\n");
-  printf("Calculating histogram for image\n");
+  printf("\t\tSmoothing image\n");
   printf("-----------------------------------------------------------------\n");
-  printf("\t\t\t\tTime (ms)\t\tMegaflops\n");
-  printf("Filter smoothing:\t\t%4f\t\t%4f\n", elapsed_smooth * 1.0e3,
-         (src.rows * src.cols * 3 * 9) / (elapsed_smooth * 1.0e6));
-  printf("Filter omp:\t\t\t%4f\t\t%4f\n", elapsed_omp * 1.0e3,
-         (src.rows * src.cols * 3 * 9) / (elapsed_omp * 1.0e6));
+  printf("\t\t\t\tTime (ms)\n");
+  printf("Filter smoothing:\t\t%4f\n", elapsed_smooth * 1.0e3);
+  printf("Filter omp:\t\t\t%4f\n", elapsed_omp * 1.0e3);
 
   if (!batch) {
     namedWindow("Original Image", cv::WINDOW_AUTOSIZE);
