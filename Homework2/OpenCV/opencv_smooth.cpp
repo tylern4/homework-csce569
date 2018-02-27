@@ -36,12 +36,13 @@ short hpf_filter_2[3][3] = {{-1, -1, -1}, {-1, 9, -1}, {-1, -1, -1}};
 
 short hpf_filter_3[3][3] = {{1, -2, 1}, {-2, 5, -2}, {1, -2, 1}};
 
-void averageing_smooth(cv::Mat src, cv::Mat dst);
-void filter_smooth(cv::Mat src, cv::Mat dst, short filter[3][3], int type);
+const int MAX_COLOR = 255;
+void filter_smooth(cv::Mat src, cv::Mat dst, short filter[3][3]);
+void filter_smooth_omp(cv::Mat src, cv::Mat dst, short filter[3][3]);
 
 int main(int argc, char **argv) {
   cv::Mat src;
-  cv::String imageName("lena.jpg"); // by default
+  cv::String imageName("../data/lena.jpg"); // by default
   if (argc > 1) {
     imageName = argv[1];
   }
@@ -50,65 +51,91 @@ int main(int argc, char **argv) {
     std::cerr << "Error opening file\n\n";
     return -1;
   }
-  cv::Mat dst = cv::Mat::zeros(src.size(), src.type());
+  cv::Mat dst0 = cv::Mat::zeros(src.size(), src.type());
+
   double elapsed_smooth = read_timer();
-  averageing_smooth(src, dst);
+  filter_smooth(src, dst0, lpf_filter_32);
   elapsed_smooth = (read_timer() - elapsed_smooth);
+
+  cv::Mat dst = cv::Mat::zeros(src.size(), src.type());
+  double elapsed_omp = read_timer();
+  filter_smooth_omp(src, dst, lpf_filter_32);
+  elapsed_omp = (read_timer() - elapsed_omp);
 
   printf("=================================================================\n");
   printf("Calculating histogram for image\n");
   printf("-----------------------------------------------------------------\n");
-  printf("averageing smoothing:\t\t\t\t%4f\n", elapsed_smooth * 1.0e3);
+  printf("\t\t\t\tTime (ms)\t\tMegaflops\n");
+  printf("Filter smoothing:\t\t%4f\t\t%4f\n", elapsed_smooth * 1.0e3,
+         (src.rows * src.cols * 3 * 9) / (elapsed_smooth * 1.0e6));
+  printf("Filter omp:\t\t\t%4f\t\t%4f\n", elapsed_omp * 1.0e3,
+         (src.rows * src.cols * 3 * 9) / (elapsed_omp * 1.0e6));
 
-  filter_smooth(src, dst, lpf_filter_9, 32);
-  averageing_smooth(src, dst);
   namedWindow("Original Image", cv::WINDOW_AUTOSIZE);
-  namedWindow("New Image", cv::WINDOW_AUTOSIZE);
   imshow("Original Image", src);
-  imshow("New Image", dst);
+  namedWindow("New Image", cv::WINDOW_AUTOSIZE);
+  imshow("New Image", dst0);
+  namedWindow("parallel", cv::WINDOW_AUTOSIZE);
+  imshow("parallel", dst);
+
   cv::waitKey(0);
 
   return 0;
 }
 
-void averageing_smooth(cv::Mat src, cv::Mat dst) {
-  // Loop over rows
-  for (int j = 1; j < src.rows - 1; j++) {
-    // Loop over columns
-    for (int i = 1; i < src.cols - 1; i++) {
-      unsigned int value[3] = {0};
-      // Loop over colors
-      for (int x = 0; x < 3; x++) {
-        /* Loop over -1,0,1 to get all pixels around
-        the desired pixel [0,0]
-        [-1,-1][0,-1][1,-1]
-        [-1,0][0,0][1,0]
-        [-1,1][0,1][1,1]
-        */
-        for (int a = -1; a <= 1; a++)
-          for (int b = -1; b <= 1; b++)
-            value[x] += src.at<cv::Vec3b>(j + a, i + b)[x];
+void filter_smooth(cv::Mat src, cv::Mat dst, short filter[3][3]) {
+  float weight = 0.0;
+  for (int a = -1; a < 2; a++) {
+    for (int b = -1; b < 2; b++) {
+      weight += filter[a + 1][b + 1];
+    }
+  }
 
-        // take average
-        value[x] /= 9;
+  for (int j = 1; j < src.rows - 1; j++) {
+    for (int i = 1; i < src.cols - 1; i++) {
+      unsigned int value[4];
+      for (int x = 0; x < 4; x++) {
+        for (int a = -1; a < 2; a++) {
+          for (int b = -1; b < 2; b++) {
+            value[x] +=
+                src.at<cv::Vec3b>(j + b, i + a)[x] * filter[a + 1][b + 1];
+          }
+        }
+
+        value[x] /= weight;
+        value[x] = ((value[x] < 0) ? 0 : value[x]);
+        value[x] = ((value[x] > MAX_COLOR) ? MAX_COLOR : value[x]);
+
         dst.at<cv::Vec3b>(j, i)[x] = value[x];
       }
     }
   }
 }
 
-void filter_smooth(cv::Mat src, cv::Mat dst, short filter[3][3], int type) {
-  const int MAX_COLOR = 255;
-  for (int j = 1; j < src.rows - 1; j++) {
-    for (int i = 1; i < src.cols - 1; i++) {
-      unsigned int value[3];
-      for (int x = 0; x < 3; x++) {
-        for (int a = -1; a < 2; a++)
-          for (int b = -1; b < 2; b++)
+void filter_smooth_omp(cv::Mat src, cv::Mat dst, short filter[3][3]) {
+  float weight = 0.0;
+
+  for (int a = -1; a < 2; a++) {
+    for (int b = -1; b < 2; b++) {
+      weight += filter[a + 1][b + 1];
+    }
+  }
+  int i, j, x, a, b;
+  unsigned int value[4];
+// parallel over the rows and columns of the so the calculation can be done
+// pixel by pixel
+#pragma omp parallel for collapse(2) private(i, j, value)
+  for (j = 1; j < src.rows - 1; j++) {
+    for (i = 1; i < src.cols - 1; i++) {
+      for (x = 0; x < 4; x++) {
+        for (a = -1; a < 2; a++) {
+          for (b = -1; b < 2; b++) {
             value[x] +=
                 src.at<cv::Vec3b>(j + b, i + a)[x] * filter[a + 1][b + 1];
+          }
+        }
 
-        value[x] /= type;
+        value[x] /= weight;
         value[x] = ((value[x] < 0) ? 0 : value[x]);
         value[x] = ((value[x] > MAX_COLOR) ? MAX_COLOR : value[x]);
 
