@@ -43,8 +43,12 @@ void filter_smooth_omp(cv::Mat src, cv::Mat dst, short filter[3][3]);
 int main(int argc, char **argv) {
   cv::Mat src;
   cv::String imageName("../data/lena.jpg"); // by default
-  if (argc > 1) {
+  bool batch = true;
+  if (argc == 2) {
     imageName = argv[1];
+  } else if (argc > 2) {
+    batch = false;
+    imageName = argv[2];
   }
   src = imread(imageName, cv::IMREAD_COLOR);
   if (src.empty()) {
@@ -71,14 +75,16 @@ int main(int argc, char **argv) {
   printf("Filter omp:\t\t\t%4f\t\t%4f\n", elapsed_omp * 1.0e3,
          (src.rows * src.cols * 3 * 9) / (elapsed_omp * 1.0e6));
 
-  namedWindow("Original Image", cv::WINDOW_AUTOSIZE);
-  imshow("Original Image", src);
-  namedWindow("New Image", cv::WINDOW_AUTOSIZE);
-  imshow("New Image", dst0);
-  namedWindow("parallel", cv::WINDOW_AUTOSIZE);
-  imshow("parallel", dst);
+  if (!batch) {
+    namedWindow("Original Image", cv::WINDOW_AUTOSIZE);
+    imshow("Original Image", src);
+    namedWindow("New Image", cv::WINDOW_AUTOSIZE);
+    imshow("New Image", dst0);
+    namedWindow("parallel", cv::WINDOW_AUTOSIZE);
+    imshow("parallel", dst);
 
-  cv::waitKey(0);
+    cv::waitKey(0);
+  }
 
   return 0;
 }

@@ -21,11 +21,14 @@ double read_timer_ms() {
   return (double)tm.time * 1000.0 + (double)tm.millitm;
 }
 
-void normalize(float histogram[256]);
-void hist(cv::Mat src, float histogram[256]);
-void normalize_omp(float histogram[256]);
-void hist_omp(cv::Mat src, float histogram[256]);
-void show_hist(float b[256], float g[256], float r[256]);
+const int MAX_SIZE = 256;
+
+void normalize(float histogram[MAX_SIZE]);
+void hist(cv::Mat src, float histogram[MAX_SIZE]);
+void normalize_omp(float histogram[MAX_SIZE]);
+void hist_omp(cv::Mat src, float histogram[MAX_SIZE]);
+void show_hist(float b[MAX_SIZE], float g[MAX_SIZE], float r[MAX_SIZE],
+               char *name);
 
 int main(int argc, char **argv) {
   cv::Mat src;
@@ -43,53 +46,54 @@ int main(int argc, char **argv) {
     return -1;
   }
 
-  float histogram_blue[256] = {0};
-  float histogram_green[256] = {0};
-  float histogram_red[256] = {0};
+  float histogram_blue[MAX_SIZE] = {0};
+  float histogram_green[MAX_SIZE] = {0};
+  float histogram_red[MAX_SIZE] = {0};
 
-  float omp_blue[256] = {0};
-  float omp_green[256] = {0};
-  float omp_red[256] = {0};
+  float omp_blue[MAX_SIZE] = {0};
+  float omp_green[MAX_SIZE] = {0};
+  float omp_red[MAX_SIZE] = {0};
 
   cv::Mat bgr[3];
   split(src, bgr);
-
-  double elapsed_seq = read_timer();
-  hist(bgr[2], histogram_red);
-  hist(bgr[1], histogram_green);
-  hist(bgr[0], histogram_blue);
-  elapsed_seq = (read_timer() - elapsed_seq);
-
-  double elapsed_omp = read_timer();
-  hist_omp(bgr[2], omp_red);
-  hist_omp(bgr[1], omp_green);
-  hist_omp(bgr[0], omp_blue);
-  elapsed_omp = (read_timer() - elapsed_omp);
 
   printf("=================================================================\n");
   printf("Calculating histogram for image\n");
   printf("-----------------------------------------------------------------\n");
   printf("\t\tTime (ms)\t\tMegaflops\n");
+  double elapsed_seq = read_timer();
+  hist(bgr[2], histogram_red);
+  hist(bgr[1], histogram_green);
+  hist(bgr[0], histogram_blue);
+  elapsed_seq = (read_timer() - elapsed_seq);
   printf("hist:\t\t%4f", elapsed_seq * 1.0e3);
   printf("\t\t%4f\n", (src.rows * src.cols * 3) / (elapsed_seq * 1.0e6));
+  double elapsed_omp = read_timer();
+  hist_omp(bgr[2], omp_red);
+  hist_omp(bgr[1], omp_green);
+  hist_omp(bgr[0], omp_blue);
+  elapsed_omp = (read_timer() - elapsed_omp);
   printf("hist_omp:\t%4f", elapsed_omp * 1.0e3);
   printf("\t\t%4f\n", (src.rows * src.cols * 3) / (elapsed_omp * 1.0e6));
 
-  if (!batch)
-    show_hist(omp_blue, omp_green, omp_red);
+  if (!batch) {
+    show_hist(histogram_blue, histogram_green, histogram_red, "reg");
+    show_hist(omp_blue, omp_green, omp_red, "omp");
+    cv::waitKey(0);
+  }
   return 0;
 }
 
-void normalize(float histogram[256]) {
+void normalize(float histogram[MAX_SIZE]) {
   int max = histogram[0];
-  for (int x = 0; x < 256; x++)
+  for (int x = 0; x < MAX_SIZE; x++)
     max = max > histogram[x] ? max : histogram[x];
 
-  for (int x = 0; x < 256; x++)
+  for (int x = 0; x < MAX_SIZE; x++)
     histogram[x] /= (float)max;
 }
 
-void hist(cv::Mat src, float histogram[256]) {
+void hist(cv::Mat src, float histogram[MAX_SIZE]) {
   short k;
   for (int i = 0; i < src.cols; i++) {
     for (int j = 0; j < src.rows; j++) {
@@ -100,8 +104,9 @@ void hist(cv::Mat src, float histogram[256]) {
   normalize(histogram);
 }
 
-void show_hist(float b[256], float g[256], float r[256]) {
-  int histSize = 256;
+void show_hist(float b[MAX_SIZE], float g[MAX_SIZE], float r[MAX_SIZE],
+               char *name) {
+  int histSize = MAX_SIZE;
   int hist_w = 512;
   int hist_h = 400;
   int bin_w = cvRound((double)hist_w / histSize);
@@ -117,48 +122,43 @@ void show_hist(float b[256], float g[256], float r[256]) {
          cv::Point(bin_w * (i), hist_h - hist_h * r[i]), cv::Scalar(0, 0, 255),
          2, 8, 0);
   }
-  namedWindow("My Hist", cv::WINDOW_AUTOSIZE);
-  imshow("My Hist", histImage);
-  cv::waitKey(0);
+  namedWindow(name, cv::WINDOW_AUTOSIZE);
+  imshow(name, histImage);
 }
 
-void normalize_omp(float histogram[256]) {
+void normalize_omp(float histogram[MAX_SIZE]) {
   int max = 0;
 #pragma omp parallel for reduction(max : max)
-  for (int x = 0; x < 256; x++)
+  for (int x = 0; x < MAX_SIZE; x++)
     max = max > histogram[x] ? max : histogram[x];
 
 #pragma omp parallel for
-  for (int x = 0; x < 256; x++)
+  for (int x = 0; x < MAX_SIZE; x++)
     histogram[x] /= (float)max;
 }
 
-void hist_omp(cv::Mat src, float histogram[256]) {
+void hist_omp(cv::Mat src, float histogram[MAX_SIZE]) {
   int max_threads = omp_get_max_threads();
-  float temp[256][max_threads];
-
-  short k = 0;
+  float temp[MAX_SIZE][max_threads];
+  int i, j, k, t;
 
 #pragma omp parallel private(k) shared(temp)
   {
     int thread = omp_get_thread_num();
-
-// Loop to initiale temp to zero
-#pragma omp parallel for
-    for (int k = 0; k < 256; k++)
+    for (k = 0; k < MAX_SIZE; k++)
       temp[k][thread] = 0;
 
-#pragma omp parallel for
-    for (int i = 0; i < src.cols; i++) {
-      for (int j = 0; j < src.rows; j++) {
+#pragma omp for private(i, j, k)
+    for (i = 0; i < src.cols; i++) {
+      for (j = 0; j < src.rows; j++) {
         k = src.at<uchar>(j, i);
         temp[k][thread] += 1;
       }
     }
   } // End parallel section
 
-  for (int t = 0; t < max_threads; t++)
-    for (int k = 0; k < 256; k++)
+  for (t = 0; t < max_threads; t++)
+    for (k = 0; k < MAX_SIZE; k++)
       histogram[k] += temp[k][t];
 
   normalize_omp(histogram);
