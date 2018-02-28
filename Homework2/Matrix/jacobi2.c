@@ -135,6 +135,7 @@ void jacobi_omp(long n, long m, REAL dx, REAL dy, REAL alpha, REAL relax,
                 REAL *u_p, REAL *f_p, REAL tol, int mits);
 
 int num_threads = 4;
+int t = 1;
 
 int main(int argc, char *argv[]) {
   long n = DEFAULT_DIMSIZE;
@@ -226,11 +227,17 @@ int main(int argc, char *argv[]) {
 #pragma omp master
   num_threads = omp_get_num_threads();
 
-  printf("========= Parallel OpenMP Execution (%d threads) =========\n",
-         num_threads);
-  double elapsed_omp = read_timer_ms();
-  jacobi_omp(n, m, dx, dy, alpha, relax, uomp, fomp, tol, mits);
-  elapsed_omp = read_timer_ms() - elapsed_omp;
+  double elapsed_omp[num_threads];
+  double error[num_threads];
+
+  for (t = 1; t <= num_threads; t++) {
+    printf("========= Parallel OpenMP Execution (%d threads) =========\n", t);
+    elapsed_omp[t] = read_timer_ms();
+    jacobi_omp(n, m, dx, dy, alpha, relax, uomp, fomp, tol, mits);
+    elapsed_omp[t] = read_timer_ms() - elapsed_omp[t];
+    error[t] = error_check(n, m, alpha, dx, dy, uomp, fomp);
+    printf("\n");
+  }
 
 #if CORRECTNESS_CHECK
   print_array("Sequential Run", "u", (REAL *)u, n, m);
@@ -244,9 +251,9 @@ int main(int argc, char *argv[]) {
   printf("---------------------------------------------------------\n");
   printf("base:\t\t%.2f\t\t%.2f\t\t%g\n", elapsed_seq,
          flops / (1.0e3 * elapsed_seq), error_check(n, m, alpha, dx, dy, u, f));
-  printf("omp(%d threads):\t%.2f\t\t%.2f\t\t%g\n", num_threads, elapsed_omp,
-         num_threads * flops / (1.0e3 * elapsed_omp),
-         error_check(n, m, alpha, dx, dy, uomp, fomp));
+  for (int t = 1; t <= num_threads; t++)
+    printf("omp(%d threads):\t%.2f\t\t%.2f\t\t%g\n", t, elapsed_omp[t],
+           t * flops / (1.0e3 * elapsed_omp[t]), error[t]);
 
   free(u);
   free(f);
@@ -361,7 +368,7 @@ void jacobi_omp(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
   //{
   while ((k <= mits) && (error > tol)) {
     error = 0.0;
-#pragma omp parallel
+#pragma omp parallel num_threads(t)
     {
 /* Copy new solution into old */
 #pragma omp for private(i, j) collapse(2)
@@ -381,7 +388,7 @@ void jacobi_omp(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
           error = error + resid * resid;
         }
 
-/* Error check  */
+/* Error check */
 #pragma omp single nowait
       {
         if (k % 500 == 0)
