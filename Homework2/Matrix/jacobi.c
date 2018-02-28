@@ -352,25 +352,18 @@ void jacobi_omp(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
   error = (10.0 * tol);
   k = 1;
 
-  // omp_set_dynamic(0);     // Explicitly disable dynamic teams
-  // omp_set_num_threads(t); // Use 4 threads for all consecutive parallel
-  // regions
-
-  //#pragma omp parallel num_threads(t) private(i, j, k, tol) shared(m, n, u,
-  // uold)
-  //{
   while ((k <= mits) && (error > tol)) {
     error = 0.0;
 #pragma omp parallel
     {
 /* Copy new solution into old */
-#pragma omp for private(i, j) collapse(2)
+#pragma omp for private(i, j)
       for (i = 0; i < n; i++)
         for (j = 0; j < m; j++)
           uold[i][j] = u[i][j];
 
-#pragma omp for private(i, j) collapse(2) reduction(+ : error)
-      for (i = 1; i < (n - 1); i++)
+#pragma omp for private(i, j) reduction(+ : error)
+      for (i = 1; i < (n - 1); i++) {
         for (j = 1; j < (m - 1); j++) {
           resid = (ax * (uold[i - 1][j] + uold[i + 1][j]) +
                    ay * (uold[i][j - 1] + uold[i][j + 1]) + b * uold[i][j] -
@@ -380,6 +373,7 @@ void jacobi_omp(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
           u[i][j] = uold[i][j] - omega * resid;
           error = error + resid * resid;
         }
+      }
 
 /* Error check  */
 #pragma omp single nowait
