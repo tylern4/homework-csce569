@@ -130,9 +130,8 @@ void hist_omp(cv::Mat src, float histogram[MAX_SIZE]) {
   float temp[MAX_SIZE][max_threads];
   int i, j, k, t, x;
   int max = 0;
-#pragma omp parallel private(i, j, k) shared(temp)
+#pragma omp parallel private(i, j, k, x, t) shared(temp)
   {
-
     int thread = omp_get_thread_num();
     for (x = 0; x < MAX_SIZE; x++)
       temp[x][thread] = 0;
@@ -147,8 +146,8 @@ void hist_omp(cv::Mat src, float histogram[MAX_SIZE]) {
 
 #pragma omp single
     for (t = 0; t < max_threads; t++)
-      for (k = 0; k < MAX_SIZE; k++)
-        histogram[k] += temp[k][t];
+      for (x = 0; x < MAX_SIZE; x++)
+        histogram[x] += temp[x][t];
 
 #pragma omp for reduction(max : max)
     for (x = 0; x < MAX_SIZE; x++)
