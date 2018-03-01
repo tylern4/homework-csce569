@@ -25,7 +25,6 @@ const int MAX_SIZE = 256;
 
 void normalize(float histogram[MAX_SIZE]);
 void hist(cv::Mat src, float histogram[MAX_SIZE]);
-void normalize_omp(float histogram[MAX_SIZE]);
 void hist_omp(cv::Mat src, float histogram[MAX_SIZE]);
 void show_hist(float b[MAX_SIZE], float g[MAX_SIZE], float r[MAX_SIZE],
                char *name);
@@ -126,40 +125,37 @@ void show_hist(float b[MAX_SIZE], float g[MAX_SIZE], float r[MAX_SIZE],
   imshow(name, histImage);
 }
 
-void normalize_omp(float histogram[MAX_SIZE]) {
-  int max = 0;
-#pragma omp parallel for reduction(max : max)
-  for (int x = 0; x < MAX_SIZE; x++)
-    max = max > histogram[x] ? max : histogram[x];
-
-#pragma omp parallel for
-  for (int x = 0; x < MAX_SIZE; x++)
-    histogram[x] /= (float)max;
-}
-
 void hist_omp(cv::Mat src, float histogram[MAX_SIZE]) {
   int max_threads = omp_get_max_threads();
   float temp[MAX_SIZE][max_threads];
-  int i, j, k, t;
-
-#pragma omp parallel private(k) shared(temp)
+  int i, j, k, t, x;
+  int max = 0;
+#pragma omp parallel private(i, j, k) shared(temp)
   {
-    int thread = omp_get_thread_num();
-    for (k = 0; k < MAX_SIZE; k++)
-      temp[k][thread] = 0;
 
-#pragma omp for private(i, j, k)
+    int thread = omp_get_thread_num();
+    for (x = 0; x < MAX_SIZE; x++)
+      temp[x][thread] = 0;
+
+#pragma omp for reduction(+ : temp)
     for (i = 0; i < src.cols; i++) {
       for (j = 0; j < src.rows; j++) {
         k = src.at<uchar>(j, i);
         temp[k][thread] += 1;
       }
     }
-  } // End parallel section
 
-  for (t = 0; t < max_threads; t++)
-    for (k = 0; k < MAX_SIZE; k++)
-      histogram[k] += temp[k][t];
+#pragma omp single
+    for (t = 0; t < max_threads; t++)
+      for (k = 0; k < MAX_SIZE; k++)
+        histogram[k] += temp[k][t];
 
-  normalize_omp(histogram);
+#pragma omp for reduction(max : max)
+    for (x = 0; x < MAX_SIZE; x++)
+      max = max > histogram[x] ? max : histogram[x];
+
+#pragma omp for
+    for (x = 0; x < MAX_SIZE; x++)
+      histogram[x] /= (float)max;
+  }
 }

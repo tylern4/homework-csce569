@@ -49,30 +49,34 @@ int main(int argc, char **argv) {
     std::string directory = argv[2];
   }
 
-  std::string imageName;
-  cv::Mat src;
-  cv::Mat dst;
+  // std::string imageName;
+  // cv::Mat src;
+  // cv::Mat dst;
   int i;
 
   double elapsed_smooth = read_timer();
-#pragma omp parallel for private(i, src, dst, imageName)
-  for (i = 0; i < numFiles; i++) {
-    imageName.append(directory);
-    imageName.append(std::to_string(i));
-    imageName.append(".jpg");
-    src = imread(imageName, cv::IMREAD_COLOR);
-    dst = cv::Mat::zeros(src.size(), src.type());
+#pragma omp parallel
+  {
+#pragma omp for private(i)
+    for (i = 0; i < numFiles; i++) {
+      std::string imageName;
+      imageName.append(directory);
+      imageName.append(std::to_string(i));
+      imageName.append(".jpg");
+      cv::Mat src = imread(imageName, cv::IMREAD_COLOR);
+      cv::Mat dst = cv::Mat::zeros(src.size(), src.type());
 
-    filter_smooth(src, dst, lpf_filter_32);
+      filter_smooth(src, dst, lpf_filter_32);
 
-    std::string outName;
-    outName.append(directory);
-    outName.append("out");
-    outName.append(std::to_string(i));
-    outName.append(".jpg");
-    imwrite(outName, dst);
-    src.release();
-    dst.release();
+      std::string outName;
+      outName.append(directory);
+      outName.append("out");
+      outName.append(std::to_string(i));
+      outName.append(".jpg");
+      imwrite(outName, dst);
+      src.release();
+      dst.release();
+    }
   }
   elapsed_smooth = (read_timer() - elapsed_smooth);
 
@@ -81,6 +85,7 @@ int main(int argc, char **argv) {
   printf("-----------------------------------------------------------------\n");
   printf("\t\t\t\tTime (ms)\n");
   printf("Filter smoothing:\t\t%4f\n", elapsed_smooth * 1.0e3);
+  printf("Per image:\t\t%4f\n", (elapsed_smooth * 1.0e3) / (float)numFiles);
 
   return 0;
 }
