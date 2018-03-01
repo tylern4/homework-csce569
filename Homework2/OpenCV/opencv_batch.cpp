@@ -39,19 +39,17 @@ short hpf_filter_3[3][3] = {{1, -2, 1}, {-2, 5, -2}, {1, -2, 1}};
 
 const int MAX_COLOR = 255;
 void filter_smooth(cv::Mat src, cv::Mat dst, short filter[3][3]);
+void filter_smooth_omp(cv::Mat src, cv::Mat dst, short filter[3][3]);
 
 int main(int argc, char **argv) {
   std::string directory = "data/";
   int numFiles = 50;
 
-  if (argc == 3) {
-    int numFiles = atoi(argv[1]);
-    std::string directory = argv[2];
+  if (argc > 2) {
+    numFiles = atoi(argv[1]);
+    directory = argv[2];
   }
 
-  // std::string imageName;
-  // cv::Mat src;
-  // cv::Mat dst;
   int i;
 
   double elapsed_smooth = read_timer();
@@ -63,16 +61,17 @@ int main(int argc, char **argv) {
       imageName.append(directory);
       imageName.append(std::to_string(i));
       imageName.append(".jpg");
-      cv::Mat src = imread(imageName, cv::IMREAD_COLOR);
-      cv::Mat dst = cv::Mat::zeros(src.size(), src.type());
-
-      filter_smooth(src, dst, lpf_filter_32);
-
       std::string outName;
       outName.append(directory);
       outName.append("out");
       outName.append(std::to_string(i));
       outName.append(".jpg");
+
+      cv::Mat src = imread(imageName, cv::IMREAD_COLOR);
+      cv::Mat dst = cv::Mat::zeros(src.size(), src.type());
+
+      filter_smooth(src, dst, lpf_filter_32);
+
       imwrite(outName, dst);
       src.release();
       dst.release();

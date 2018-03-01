@@ -56,24 +56,28 @@ int main(int argc, char **argv) {
   cv::Mat bgr[3];
   split(src, bgr);
 
-  printf("=================================================================\n");
-  printf("Calculating histogram for image\n");
-  printf("-----------------------------------------------------------------\n");
-  printf("\t\tTime (ms)\t\tMegaflops\n");
   double elapsed_seq = read_timer();
   hist(bgr[2], histogram_red);
   hist(bgr[1], histogram_green);
   hist(bgr[0], histogram_blue);
   elapsed_seq = (read_timer() - elapsed_seq);
-  printf("hist:\t\t%4f", elapsed_seq * 1.0e3);
-  printf("\t\t%4f\n", (src.rows * src.cols * 3) / (elapsed_seq * 1.0e6));
+
   double elapsed_omp = read_timer();
   hist_omp(bgr[2], omp_red);
   hist_omp(bgr[1], omp_green);
   hist_omp(bgr[0], omp_blue);
   elapsed_omp = (read_timer() - elapsed_omp);
+
+  printf("=================================================================\n");
+  printf("Calculating histogram for image\n");
+  printf("-----------------------------------------------------------------\n");
+  printf("\t\tTime (ms)\t\tMegaflops\n");
+  printf("hist:\t\t%4f", elapsed_seq * 1.0e3);
+  printf("\t\t%4f\n", (src.rows * src.cols * 3) / (elapsed_seq * 1.0e6));
   printf("hist_omp:\t%4f", elapsed_omp * 1.0e3);
   printf("\t\t%4f\n", (src.rows * src.cols * 3) / (elapsed_omp * 1.0e6));
+  printf("-----------------------------------------------------------------\n");
+  printf("Speedup:\t\t\t%0.2f \%\n", 100 * (elapsed_omp / elapsed_seq));
 
   if (!batch) {
     show_hist(histogram_blue, histogram_green, histogram_red, "reg");
