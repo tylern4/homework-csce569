@@ -198,7 +198,7 @@ int main(int argc, char *argv[]) {
 
     printf("================ Sequential Execution ================\n");
     double elapsed_seq = read_timer_ms();
-    jacobi_seq(n, m, dx, dy, alpha, relax, u, f, tol, mits);
+    ////////////jacobi_seq(n, m, dx, dy, alpha, relax, u, f, tol, mits);
     elapsed_seq = read_timer_ms() - elapsed_seq;
     printf("\n");
   }
@@ -218,6 +218,33 @@ int main(int argc, char *argv[]) {
    *
    */
 
+  int rows_to_process = n / numprocs;
+  int rows_to_send = rows_to_process + 1;
+  int rts;
+
+  if (myrank == 0) {
+    int x;
+    for (x = 1; x < numprocs; x++) {
+      printf("================ (x = %d) ================\n", x);
+      printf("%x,%x\n", &umpi, &fmpi);
+      rts = (x == (numprocs - 1)) ? (rows_to_send - 1) : rows_to_send;
+      printf("%d,%d\n", rts, x);
+      REAL *uptr = &umpi + (x * (rts - 1));
+      REAL *fptr = &fmpi + (x * (rts - 1));
+      printf("%x,%x\n", &uptr, &fptr);
+      // MPI_Send(uptr, rts * m, MPI_FLOAT, x, x, MPI_COMM_WORLD);
+      // MPI_Send(fptr, rts * m, MPI_FLOAT, x, x, MPI_COMM_WORLD);
+    }
+  } else {
+    // printf("================ (rank = %d) ================\n", myrank);
+    umpi = malloc(rows_to_process * m * sizeof(REAL));
+    fmpi = malloc(rows_to_process * m * sizeof(REAL));
+    rts = (myrank == (numprocs - 1)) ? (rows_to_send - 1) : rows_to_send;
+    // MPI_Recv(umpi, rts * m, MPI_FLOAT, 0, myrank, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    // MPI_Recv(fmpi, rts * m, MPI_FLOAT, 0, myrank, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+    // printf("Hi\n");
+  }
+
   MPI_Barrier(MPI_COMM_WORLD);
   if (myrank == 0) {
     printf("================ Parallel MPI Execution (%d processes) ================\n", numprocs);
@@ -229,7 +256,7 @@ int main(int argc, char *argv[]) {
    * You do not need to use exactly the same function and its arguments,
    * feel free to adjust as you see fit
    */
-  jacobi_mpi(n, m, dx, dy, alpha, relax, umpi, fmpi, tol, mits);
+  ////////////jacobi_mpi(n, m, dx, dy, alpha, relax, umpi, fmpi, tol, mits);
 
   MPI_Barrier(MPI_COMM_WORLD); /* this may be unnecessnary */
   if (myrank == 0) {
@@ -240,7 +267,7 @@ int main(int argc, char *argv[]) {
   /* TODO #3: Each process sends data (umpi) to process 0 using MPI_Send/Recv, MPI_Gather may work as well. */
 
   if (myrank == 0) {
-#if CORRECTNESS_CHECK
+#ifdef CORRECTNESS_CHECK
     print_array("Sequential Run", "u", (REAL *)u, n, m);
     print_array("MPI Parallel ", "umpi", (REAL *)umpi, n, m);
 #endif
