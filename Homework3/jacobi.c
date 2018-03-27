@@ -197,7 +197,7 @@ int main(int argc, char *argv[]) {
   MPI_Request request;
 
   int rows_to_process = n / numprocs;
-  int rows_to_send = rows_to_process + 1;
+  int rows_to_send = rows_to_process + 2;
   int rts;
 
   if (myrank == 0) {
@@ -218,7 +218,7 @@ int main(int argc, char *argv[]) {
 
     printf("================ Sequential Execution ================\n");
     double elapsed_seq = read_timer_ms();
-    ////////////jacobi_seq(n, m, dx, dy, alpha, relax, u, f, tol, mits);
+    jacobi_seq(n, m, dx, dy, alpha, relax, u, f, tol, mits);
     elapsed_seq = read_timer_ms() - elapsed_seq;
     printf("\n");
   }
@@ -246,35 +246,33 @@ int main(int argc, char *argv[]) {
     for (int send_to_rank = 1; send_to_rank < numprocs; send_to_rank++) {
       rts =
           (send_to_rank == (numprocs - 1)) ? (rows_to_send - 1) : rows_to_send;
-      // printf("rts for %d send %d\n", send_to_rank, rts);
-      // REAL *uptr = &umpi + sizeof(REAL) * (send_to_rank * rts - 1);
-      REAL *uptr = &umpi + sizeof(REAL) * ((send_to_rank - 1) * rts + 1);
-      REAL *fptr = &fmpi + sizeof(REAL) * (send_to_rank * rts);
-      MPI_Send(uptr, rts * m, MPI_FLOAT, send_to_rank, send_to_rank,
-               MPI_COMM_WORLD);
-      // MPI_Send(fptr, rts * m, MPI_FLOAT, send_to_rank, send_to_rank,
-      //         MPI_COMM_WORLD);
+      REAL *uptr = umpi + (send_to_rank * rts - 1) * m;
+      REAL *fptr = umpi + (send_to_rank * rts - 1) * m;
       /*
-            MPI_Isend(uptr, rts * m, MPI_FLOAT, send_to_rank, send_to_rank,
-                      MPI_COMM_WORLD, &request);
-            MPI_Isend(fptr, rts * m, MPI_FLOAT, send_to_rank, send_to_rank,
-                      MPI_COMM_WORLD, &request);
-
+            MPI_Send(uptr, rts * m, MPI_FLOAT, send_to_rank, send_to_rank,
+                     MPI_COMM_WORLD);
+            MPI_Send(fptr, rts * m, MPI_FLOAT, send_to_rank, send_to_rank,
+                     MPI_COMM_WORLD);
       */
+
+      MPI_Isend(uptr, rts * m, MPI_FLOAT, send_to_rank, send_to_rank,
+                MPI_COMM_WORLD, &request);
+      MPI_Isend(fptr, rts * m, MPI_FLOAT, send_to_rank, send_to_rank,
+                MPI_COMM_WORLD, &request);
     }
   } else {
     rts = (myrank == (numprocs - 1)) ? (rows_to_send - 1) : rows_to_send;
-    // printf("rts for %d recv %d\n", myrank, rts);
     REAL *umpi = (REAL *)malloc(rts * m * sizeof(REAL));
     REAL *fmpi = (REAL *)malloc(rts * m * sizeof(REAL));
-    /*
+
     MPI_Irecv(umpi, rts * m, MPI_FLOAT, 0, myrank, MPI_COMM_WORLD, &request);
     MPI_Irecv(fmpi, rts * m, MPI_FLOAT, 0, myrank, MPI_COMM_WORLD, &request);
-    */
+    /*
     MPI_Recv(umpi, rts * m, MPI_FLOAT, 0, myrank, MPI_COMM_WORLD,
              MPI_STATUS_IGNORE);
-    // MPI_Recv(fmpi, rts * m, MPI_FLOAT, 0, myrank, MPI_COMM_WORLD,
-    //         MPI_STATUS_IGNORE);
+    MPI_Recv(fmpi, rts * m, MPI_FLOAT, 0, myrank, MPI_COMM_WORLD,
+             MPI_STATUS_IGNORE);
+             */
   }
 
   MPI_Barrier(MPI_COMM_WORLD);
@@ -291,11 +289,12 @@ int main(int argc, char *argv[]) {
    * You do not need to use exactly the same function and its arguments,
    * feel free to adjust as you see fit
    */
-  ////////////jacobi_mpi(n, m, dx, dy, alpha, relax, umpi, fmpi, tol, mits);
+  //// jacobi_mpi(n, m, dx, dy, alpha, relax, umpi, fmpi, tol, mits);
 
   MPI_Barrier(MPI_COMM_WORLD); /* this may be unnecessnary */
   if (myrank == 0) {
     elapsed_mpi = read_timer_ms() - elapsed_mpi;
+    elapsed_mpi = 0;
     printf("\n");
   }
 
@@ -318,6 +317,10 @@ int main(int argc, char *argv[]) {
     printf("mpi(%d processes):\t%.2f\t\t%.2f\t\t%g\n", numprocs, elapsed_mpi,
            flops / (1.0e3 * elapsed_mpi),
            error_check(n, m, alpha, dx, dy, umpi, fmpi));
+
+    printf("--------------------------------------------------------\n");
+    printf("--------------------------------------------------------\n");
+    printf("--------------------------------------------------------\n");
 
     free(u);
     free(f);
@@ -437,6 +440,8 @@ void jacobi_mpi(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
   REAL uold[n][m];
   REAL(*u)[m] = (REAL(*)[m])u_p;
   REAL(*f)[m] = (REAL(*)[m])f_p;
+
+  //// recompute temp and num of rows from above
   /*
    * Initialize coefficients */
   /* X-direction coef */
