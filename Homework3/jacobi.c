@@ -194,6 +194,7 @@ int main(int argc, char *argv[]) {
   REAL *umpi;
   REAL *fmpi;
   double elapsed_seq, elapsed_mpi;
+  MPI_Request request;
 
   int rows_to_process = n / numprocs;
   int rows_to_send = rows_to_process + 1;
@@ -222,13 +223,6 @@ int main(int argc, char *argv[]) {
     printf("\n");
   }
 
-  MPI_Barrier(MPI_COMM_WORLD);
-  if (myrank != 0) {
-    rts = (myrank == (numprocs - 1)) ? (rows_to_send - 1) : rows_to_send;
-    REAL *umpi = (REAL *)malloc(rts * m * sizeof(REAL));
-    REAL *fmpi = (REAL *)malloc(rts * m * sizeof(REAL));
-  }
-
   /* TODO #1: process 0 performs data decomposition and distribution of the umpi
    *and fmpi arrays to
    * other processes using MPI_Send/Recv. MPI_Scatter may work, but the
@@ -249,22 +243,38 @@ int main(int argc, char *argv[]) {
    */
   MPI_Barrier(MPI_COMM_WORLD);
   if (myrank == 0) {
-    printf("================ (rank = %d) ================\n", myrank);
-    for (int rnk = 1; rnk < numprocs; rnk++) {
-      rts = (rnk == (numprocs - 1)) ? (rows_to_send - 1) : rows_to_send;
-      float *uptr = &umpi + (rnk * rts - 1);
-      float *fptr = &fmpi + (rnk * rts - 1);
-      printf("Rank %d Sending rank %d, rows: %d\n", myrank, rnk, rts);
-      MPI_Send(uptr, rts * m, MPI_FLOAT, rnk, rnk, MPI_COMM_WORLD);
-      MPI_Send(fptr, rts * m, MPI_FLOAT, rnk, rnk, MPI_COMM_WORLD);
+    for (int send_to_rank = 1; send_to_rank < numprocs; send_to_rank++) {
+      rts =
+          (send_to_rank == (numprocs - 1)) ? (rows_to_send - 1) : rows_to_send;
+      // printf("rts for %d send %d\n", send_to_rank, rts);
+      // REAL *uptr = &umpi + sizeof(REAL) * (send_to_rank * rts - 1);
+      REAL *uptr = &umpi + sizeof(REAL) * ((send_to_rank - 1) * rts + 1);
+      REAL *fptr = &fmpi + sizeof(REAL) * (send_to_rank * rts);
+      MPI_Send(uptr, rts * m, MPI_FLOAT, send_to_rank, send_to_rank,
+               MPI_COMM_WORLD);
+      // MPI_Send(fptr, rts * m, MPI_FLOAT, send_to_rank, send_to_rank,
+      //         MPI_COMM_WORLD);
+      /*
+            MPI_Isend(uptr, rts * m, MPI_FLOAT, send_to_rank, send_to_rank,
+                      MPI_COMM_WORLD, &request);
+            MPI_Isend(fptr, rts * m, MPI_FLOAT, send_to_rank, send_to_rank,
+                      MPI_COMM_WORLD, &request);
+
+      */
     }
   } else {
     rts = (myrank == (numprocs - 1)) ? (rows_to_send - 1) : rows_to_send;
-    printf("Rank %d Recv, rows: %d\n", myrank, rts);
+    // printf("rts for %d recv %d\n", myrank, rts);
+    REAL *umpi = (REAL *)malloc(rts * m * sizeof(REAL));
+    REAL *fmpi = (REAL *)malloc(rts * m * sizeof(REAL));
+    /*
+    MPI_Irecv(umpi, rts * m, MPI_FLOAT, 0, myrank, MPI_COMM_WORLD, &request);
+    MPI_Irecv(fmpi, rts * m, MPI_FLOAT, 0, myrank, MPI_COMM_WORLD, &request);
+    */
     MPI_Recv(umpi, rts * m, MPI_FLOAT, 0, myrank, MPI_COMM_WORLD,
              MPI_STATUS_IGNORE);
-    MPI_Recv(fmpi, rts * m, MPI_FLOAT, 0, myrank, MPI_COMM_WORLD,
-             MPI_STATUS_IGNORE);
+    // MPI_Recv(fmpi, rts * m, MPI_FLOAT, 0, myrank, MPI_COMM_WORLD,
+    //         MPI_STATUS_IGNORE);
   }
 
   MPI_Barrier(MPI_COMM_WORLD);
@@ -419,7 +429,7 @@ void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
 void jacobi_mpi(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
                 REAL *u_p, REAL *f_p, REAL tol, int mits) {
   long i, j, k;
-  REAL error;
+  REAL error, error_t;
   REAL ax;
   REAL ay;
   REAL b;
@@ -465,17 +475,22 @@ void jacobi_mpi(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
         // printf("i: %d, j: %d, resid: %f\n", i, j, resid);
 
         u[i][j] = uold[i][j] - omega * resid;
-        error = error + resid * resid;
+        error_t = error_t + resid * resid;
       }
 
     /* TODO #2.c: compute the global error using MPI_Allreduce or
      * MPI_Reduce+MPI_Bcast
      */
-    /* Error check */
-    if (k % 500 == 0)
-      printf("Finished %ld iteration with error: %g\n", k, error);
-    error = sqrt(error) / (n * m);
-    k = k + 1;
+    MPI_Allreduce(&error_t, &error, numprocs, MPI_FLOAT, MPI_SUM,
+                  MPI_COMM_WORLD);
+
+    if (myrank == 0) {
+      if (k % 500 == 0)
+        printf("Finished %ld iteration with error: %g\n", k, error);
+
+      error = sqrt(error) / (n * m);
+      k = k + 1;
+    }
   } /*  End iteration loop */
   printf("Total Number of Iterations: %ld\n", k);
   printf("Residual: %.15g\n", error);
