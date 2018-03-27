@@ -64,7 +64,8 @@ void print_array(char *title, char *name, REAL *A, long n, long m) {
  * Assumes exact solution is u(x,y) = (1-x^2)*(1-y^2)
  *
  ******************************************************/
-void initialize(long n, long m, REAL alpha, REAL dx, REAL dy, REAL *u_p, REAL *f_p) {
+void initialize(long n, long m, REAL alpha, REAL dx, REAL dy, REAL *u_p,
+                REAL *f_p) {
   long i;
   long j;
   long xx;
@@ -80,7 +81,8 @@ void initialize(long n, long m, REAL alpha, REAL dx, REAL dy, REAL *u_p, REAL *f
       xx = ((int)(-1.0 + (dx * (i - 1))));
       yy = ((int)(-1.0 + (dy * (j - 1))));
       u[i][j] = 0.0;
-      f[i][j] = (((((-1.0 * alpha) * (1.0 - (xx * xx))) * (1.0 - (yy * yy))) - (2.0 * (1.0 - (xx * xx)))) -
+      f[i][j] = (((((-1.0 * alpha) * (1.0 - (xx * xx))) * (1.0 - (yy * yy))) -
+                  (2.0 * (1.0 - (xx * xx)))) -
                  (2.0 * (1.0 - (yy * yy))));
     }
 }
@@ -91,7 +93,8 @@ void initialize(long n, long m, REAL alpha, REAL dx, REAL dy, REAL *u_p, REAL *f
  * Checks error between numerical and exact solution
  *
  ************************************************************/
-double error_check(long n, long m, REAL alpha, REAL dx, REAL dy, REAL *u_p, REAL *f_p) {
+double error_check(long n, long m, REAL alpha, REAL dx, REAL dy, REAL *u_p,
+                   REAL *f_p) {
   int i;
   int j;
   REAL xx;
@@ -112,10 +115,10 @@ double error_check(long n, long m, REAL alpha, REAL dx, REAL dy, REAL *u_p, REAL
   error = (sqrt(error) / (n * m));
   return error;
 }
-void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL relax, REAL *u_p, REAL *f_p, REAL tol,
-                int mits);
-void jacobi_mpi(long n, long m, REAL dx, REAL dy, REAL alpha, REAL relax, REAL *u_p, REAL *f_p, REAL tol,
-                int mits);
+void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL relax,
+                REAL *u_p, REAL *f_p, REAL tol, int mits);
+void jacobi_mpi(long n, long m, REAL dx, REAL dy, REAL alpha, REAL relax,
+                REAL *u_p, REAL *f_p, REAL tol, int mits);
 int numprocs;
 int myrank;
 
@@ -163,11 +166,23 @@ int main(int argc, char *argv[]) {
     /* the rest of arg ignored */
     fprintf(stderr, "Usage: jacobi [<n> <m> <alpha> <tol> <relax> <mits>]\n");
     fprintf(stderr, "\tn - grid dimension in x direction, default: %ld\n", n);
-    fprintf(stderr, "\tm - grid dimension in y direction, default: n if provided or %ld\n", m);
-    fprintf(stderr, "\talpha - Helmholtz constant (always greater than 0.0), default: %g\n", alpha);
-    fprintf(stderr, "\ttol   - error tolerance for iterative solver, default: %g\n", tol);
-    fprintf(stderr, "\trelax - Successice over relaxation parameter, default: %g\n", relax);
-    fprintf(stderr, "\tmits  - Maximum iterations for iterative solver, default: %d\n", mits);
+    fprintf(
+        stderr,
+        "\tm - grid dimension in y direction, default: n if provided or %ld\n",
+        m);
+    fprintf(
+        stderr,
+        "\talpha - Helmholtz constant (always greater than 0.0), default: %g\n",
+        alpha);
+    fprintf(stderr,
+            "\ttol   - error tolerance for iterative solver, default: %g\n",
+            tol);
+    fprintf(stderr,
+            "\trelax - Successice over relaxation parameter, default: %g\n",
+            relax);
+    fprintf(stderr,
+            "\tmits  - Maximum iterations for iterative solver, default: %d\n",
+            mits);
   }
   REAL dx; /* grid spacing in x direction */
   REAL dy; /* grid spacing in y direction */
@@ -179,6 +194,10 @@ int main(int argc, char *argv[]) {
   REAL *umpi;
   REAL *fmpi;
   double elapsed_seq, elapsed_mpi;
+
+  int rows_to_process = n / numprocs;
+  int rows_to_send = rows_to_process + 1;
+  int rts;
 
   if (myrank == 0) {
     printf("jacobi %ld %ld %g %g %g %d\n", n, m, alpha, tol, relax, mits);
@@ -202,55 +221,61 @@ int main(int argc, char *argv[]) {
     elapsed_seq = read_timer_ms() - elapsed_seq;
     printf("\n");
   }
-  MPI_Barrier(MPI_COMM_WORLD);
 
-  /* TODO #1: process 0 performs data decomposition and distribution of the umpi and fmpi arrays to
-   * other processes using MPI_Send/Recv. MPI_Scatter may work, but the recommendation is to implement using
+  MPI_Barrier(MPI_COMM_WORLD);
+  if (myrank != 0) {
+    rts = (myrank == (numprocs - 1)) ? (rows_to_send - 1) : rows_to_send;
+    REAL *umpi = (REAL *)malloc(rts * m * sizeof(REAL));
+    REAL *fmpi = (REAL *)malloc(rts * m * sizeof(REAL));
+  }
+
+  /* TODO #1: process 0 performs data decomposition and distribution of the umpi
+   *and fmpi arrays to
+   * other processes using MPI_Send/Recv. MPI_Scatter may work, but the
+   *recommendation is to implement using
    * MPI_Send/Recv first and then to see whether you can convert to MPI_Scatter.
    *
-   * Row-wise decomposition should be used. Memory needs to be allocated for holding the umpi and
+   * Row-wise decomposition should be used. Memory needs to be allocated for
+   *holding the umpi and
    * fmpi data distributed to each process.
    *
    * Assuming N is dividable by numprocs. Considering the boundary row(s) that
-   * need to be exchanged between processes, you will need to properly set the address of MPI_Send/Recv
+   * need to be exchanged between processes, you will need to properly set the
+   *address of MPI_Send/Recv
    * of of each process for sending data to its neighbour(s).
-   * Some processes (0, numprocs-1) have only one neighbour, and others have two neighbours.
+   * Some processes (0, numprocs-1) have only one neighbour, and others have two
+   *neighbours.
    *
    */
-
-  int rows_to_process = n / numprocs;
-  int rows_to_send = rows_to_process + 1;
-  int rts;
-
+  MPI_Barrier(MPI_COMM_WORLD);
   if (myrank == 0) {
-    int x;
-    for (x = 1; x < numprocs; x++) {
-      printf("================ (x = %d) ================\n", x);
-      printf("%x,%x\n", &umpi, &fmpi);
-      rts = (x == (numprocs - 1)) ? (rows_to_send - 1) : rows_to_send;
-      printf("%d,%d\n", rts, x);
-      REAL *uptr = &umpi + (x * (rts - 1));
-      REAL *fptr = &fmpi + (x * (rts - 1));
-      printf("%x,%x\n", &uptr, &fptr);
-      // MPI_Send(uptr, rts * m, MPI_FLOAT, x, x, MPI_COMM_WORLD);
-      // MPI_Send(fptr, rts * m, MPI_FLOAT, x, x, MPI_COMM_WORLD);
+    printf("================ (rank = %d) ================\n", myrank);
+    for (int rnk = 1; rnk < numprocs; rnk++) {
+      rts = (rnk == (numprocs - 1)) ? (rows_to_send - 1) : rows_to_send;
+      float *uptr = &umpi + (rnk * rts - 1);
+      float *fptr = &fmpi + (rnk * rts - 1);
+      printf("Rank %d Sending rank %d, rows: %d\n", myrank, rnk, rts);
+      MPI_Send(uptr, rts * m, MPI_FLOAT, rnk, rnk, MPI_COMM_WORLD);
+      MPI_Send(fptr, rts * m, MPI_FLOAT, rnk, rnk, MPI_COMM_WORLD);
     }
   } else {
-    // printf("================ (rank = %d) ================\n", myrank);
-    umpi = malloc(rows_to_process * m * sizeof(REAL));
-    fmpi = malloc(rows_to_process * m * sizeof(REAL));
     rts = (myrank == (numprocs - 1)) ? (rows_to_send - 1) : rows_to_send;
-    // MPI_Recv(umpi, rts * m, MPI_FLOAT, 0, myrank, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    // MPI_Recv(fmpi, rts * m, MPI_FLOAT, 0, myrank, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    // printf("Hi\n");
+    printf("Rank %d Recv, rows: %d\n", myrank, rts);
+    MPI_Recv(umpi, rts * m, MPI_FLOAT, 0, myrank, MPI_COMM_WORLD,
+             MPI_STATUS_IGNORE);
+    MPI_Recv(fmpi, rts * m, MPI_FLOAT, 0, myrank, MPI_COMM_WORLD,
+             MPI_STATUS_IGNORE);
   }
 
   MPI_Barrier(MPI_COMM_WORLD);
   if (myrank == 0) {
-    printf("================ Parallel MPI Execution (%d processes) ================\n", numprocs);
+    printf("================ Parallel MPI Execution (%d processes) "
+           "================\n",
+           numprocs);
     elapsed_mpi = read_timer_ms();
   }
-  /* TODO #2: perform jacobi iterative method for computation, check more details in jacobi_mpi function
+  /* TODO #2: perform jacobi iterative method for computation, check more
+   *details in jacobi_mpi function
    *comments
    *
    * You do not need to use exactly the same function and its arguments,
@@ -264,7 +289,8 @@ int main(int argc, char *argv[]) {
     printf("\n");
   }
 
-  /* TODO #3: Each process sends data (umpi) to process 0 using MPI_Send/Recv, MPI_Gather may work as well. */
+  /* TODO #3: Each process sends data (umpi) to process 0 using MPI_Send/Recv,
+   * MPI_Gather may work as well. */
 
   if (myrank == 0) {
 #ifdef CORRECTNESS_CHECK
@@ -276,9 +302,11 @@ int main(int argc, char *argv[]) {
     printf("--------------------------------------------------------\n");
     printf("Performance:\tRuntime(ms)\tMFLOPS\t\tError\n");
     printf("--------------------------------------------------------\n");
-    printf("base:\t\t%.2f\t\t%.2f\t\t%g\n", elapsed_seq, flops / (1.0e3 * elapsed_seq),
+    printf("base:\t\t%.2f\t\t%.2f\t\t%g\n", elapsed_seq,
+           flops / (1.0e3 * elapsed_seq),
            error_check(n, m, alpha, dx, dy, u, f));
-    printf("mpi(%d processes):\t%.2f\t\t%.2f\t\t%g\n", numprocs, elapsed_mpi, flops / (1.0e3 * elapsed_mpi),
+    printf("mpi(%d processes):\t%.2f\t\t%.2f\t\t%g\n", numprocs, elapsed_mpi,
+           flops / (1.0e3 * elapsed_mpi),
            error_check(n, m, alpha, dx, dy, umpi, fmpi));
 
     free(u);
@@ -310,8 +338,8 @@ int main(int argc, char *argv[]) {
  *
  * Output : u(n,m) - Solution
  *****************************************************************/
-void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega, REAL *u_p, REAL *f_p, REAL tol,
-                int mits) {
+void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
+                REAL *u_p, REAL *f_p, REAL tol, int mits) {
   long i, j, k;
   REAL error;
   REAL ax;
@@ -336,12 +364,14 @@ void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega, REAL *
 
     /* Copy new solution into old */
     for (i = 0; i < n; i++)
-      for (j = 0; j < m; j++) uold[i][j] = u[i][j];
+      for (j = 0; j < m; j++)
+        uold[i][j] = u[i][j];
 
     for (i = 1; i < (n - 1); i++)
       for (j = 1; j < (m - 1); j++) {
-        resid = (ax * (uold[i - 1][j] + uold[i + 1][j]) + ay * (uold[i][j - 1] + uold[i][j + 1]) +
-                 b * uold[i][j] - f[i][j]) /
+        resid = (ax * (uold[i - 1][j] + uold[i + 1][j]) +
+                 ay * (uold[i][j - 1] + uold[i][j + 1]) + b * uold[i][j] -
+                 f[i][j]) /
                 b;
         // printf("i: %d, j: %d, resid: %f\n", i, j, resid);
 
@@ -349,7 +379,8 @@ void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega, REAL *
         error = error + resid * resid;
       }
     /* Error check */
-    if (k % 500 == 0) printf("Finished %ld iteration with error: %g\n", k, error);
+    if (k % 500 == 0)
+      printf("Finished %ld iteration with error: %g\n", k, error);
     error = sqrt(error) / (n * m);
 
     k = k + 1;
@@ -359,27 +390,34 @@ void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega, REAL *
 }
 
 /**
- * TODO #2: MPI implementation of Jacobi methods using row-wise data distribution. For each iteration of the
+ * TODO #2: MPI implementation of Jacobi methods using row-wise data
+ *distribution. For each iteration of the
  *while loop,
- * each process needs to exchange boundary data with its neighbor(s) using MPI_Send and MPI_Recv, and then
+ * each process needs to exchange boundary data with its neighbor(s) using
+ *MPI_Send and MPI_Recv, and then
  *perform computation.
  * You can also use MPI_Isend and MPI_Irecv for boundary exchange.
  *
- * In each iteration, error computed by each process needs to be reduced using add ops by process 0 and
- * then broadcasted to all processes, each of which will then check whether they need terminate the while
+ * In each iteration, error computed by each process needs to be reduced using
+ *add ops by process 0 and
+ * then broadcasted to all processes, each of which will then check whether they
+ *need terminate the while
  *loop. You can use
  * MPI_Allreduce or MPI_Reduce+MPI_Bcast to do that.
  *
  * printf calls should only be performed by process 0
  *
- * You do not need to use the same arguments, feel free to change as you think reasonable.
+ * You do not need to use the same arguments, feel free to change as you think
+ *reasonable.
  *
- * Since this function is called by each process who computes u subarray(the portion of u array distributed
+ * Since this function is called by each process who computes u subarray(the
+ *portion of u array distributed
  *from process 0),
- * u_p and f_p is actually the pointer of the subarray, and n and m are for the size of the subarray.
+ * u_p and f_p is actually the pointer of the subarray, and n and m are for the
+ *size of the subarray.
  */
-void jacobi_mpi(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega, REAL *u_p, REAL *f_p, REAL tol,
-                int mits) {
+void jacobi_mpi(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
+                REAL *u_p, REAL *f_p, REAL tol, int mits) {
   long i, j, k;
   REAL error;
   REAL ax;
@@ -403,21 +441,26 @@ void jacobi_mpi(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega, REAL *
     error = 0.0;
 
     /* Copy new solution into old */
-    /* TODO #2.a: since u and f are pointers to the subarray that contains boundary data, you will need to
+    /* TODO #2.a: since u and f are pointers to the subarray that contains
+     * boundary data, you will need to
      * adjust the
-     * start and end iteration of i and j depending on whether the process has one neighbour or two
+     * start and end iteration of i and j depending on whether the process has
+     * one neighbour or two
      * neighbours.
      * You need to do similar for the next for loops.
      */
     for (i = 0; i < n; i++)
-      for (j = 0; j < m; j++) uold[i][j] = u[i][j];
-    /* TODO #2.b: boundary exchange with neighbour process(es) using MPI_Send/Recv.
+      for (j = 0; j < m; j++)
+        uold[i][j] = u[i][j];
+    /* TODO #2.b: boundary exchange with neighbour process(es) using
+     * MPI_Send/Recv.
      * The memory address of the boundary data should be correctly specified.
      */
     for (i = 1; i < (n - 1); i++)
       for (j = 1; j < (m - 1); j++) {
-        resid = (ax * (uold[i - 1][j] + uold[i + 1][j]) + ay * (uold[i][j - 1] + uold[i][j + 1]) +
-                 b * uold[i][j] - f[i][j]) /
+        resid = (ax * (uold[i - 1][j] + uold[i + 1][j]) +
+                 ay * (uold[i][j - 1] + uold[i][j + 1]) + b * uold[i][j] -
+                 f[i][j]) /
                 b;
         // printf("i: %d, j: %d, resid: %f\n", i, j, resid);
 
@@ -425,10 +468,12 @@ void jacobi_mpi(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega, REAL *
         error = error + resid * resid;
       }
 
-    /* TODO #2.c: compute the global error using MPI_Allreduce or MPI_Reduce+MPI_Bcast
+    /* TODO #2.c: compute the global error using MPI_Allreduce or
+     * MPI_Reduce+MPI_Bcast
      */
     /* Error check */
-    if (k % 500 == 0) printf("Finished %ld iteration with error: %g\n", k, error);
+    if (k % 500 == 0)
+      printf("Finished %ld iteration with error: %g\n", k, error);
     error = sqrt(error) / (n * m);
     k = k + 1;
   } /*  End iteration loop */
