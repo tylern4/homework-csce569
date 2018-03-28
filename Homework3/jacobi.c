@@ -283,7 +283,7 @@ int main(int argc, char *argv[]) {
    * You do not need to use exactly the same function and its arguments,
    * feel free to adjust as you see fit
    */
-  //// jacobi_mpi(n, m, dx, dy, alpha, relax, umpi, fmpi, tol, mits);
+  jacobi_mpi(n, m, dx, dy, alpha, relax, umpi, fmpi, tol, mits);
 
   MPI_Barrier(MPI_COMM_WORLD); /* this may be unnecessnary */
   if (myrank == 0) {
@@ -327,10 +327,10 @@ int main(int argc, char *argv[]) {
     printf("--------------------------------------------------------\n");
     printf("Performance:\tRuntime(ms)\tMFLOPS\t\tError\n");
     printf("--------------------------------------------------------\n");
-    printf("base:\t\t%.2f\t\t%.2f\t\t%g\n", elapsed_seq, flops / (1.0e3 * elapsed_seq), 0.0);
-    // error_check(n, m, alpha, dx, dy, u, f);
-    printf("mpi(%d processes):\t%.2f\t\t%.2f\t\t%g\n", numprocs, elapsed_mpi, flops / (1.0e3 * elapsed_mpi), 0.0);
-    // error_check(n, m, alpha, dx, dy, umpi, fmpi));
+    printf("base:\t\t%.2f\t\t%.2f\t\t%g\n", elapsed_seq, flops / (1.0e3 * elapsed_seq),
+           error_check(n, m, alpha, dx, dy, u, f));
+    printf("mpi(%d processes):\t%.2f\t\t%.2f\t\t%g\n", numprocs, elapsed_mpi, flops / (1.0e3 * elapsed_mpi),
+           error_check(n, m, alpha, dx, dy, umpi, fmpi));
 
     free(u);
     free(f);
@@ -454,7 +454,7 @@ void jacobi_mpi(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega, REAL *
   ay = (1.0 / (dy * dy));
   /* Central coeff */
   b = (((-2.0 / (dx * dx)) - (2.0 / (dy * dy))) - alpha);
-  error = (10.0 * tol);
+  gerror = (10.0 * tol);
   k = 1;
   while ((k <= mits) && (gerror > tol)) {
     error = 0.0;
@@ -470,32 +470,38 @@ void jacobi_mpi(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega, REAL *
      */
     for (i = 0; i < n; i++)
       for (j = 0; j < m; j++) uold[i][j] = u[i][j];
+
     /* TODO #2.b: boundary exchange with neighbour process(es) using
      * MPI_Send/Recv.
      * The memory address of the boundary data should be correctly specified.
      */
-    for (i = 1; i < (n - 1); i++)
-      for (j = 1; j < (m - 1); j++) {
-        resid =
-            (ax * (uold[i - 1][j] + uold[i + 1][j]) + ay * (uold[i][j - 1] + uold[i][j + 1]) + b * uold[i][j] - f[i][j]) / b;
-        // printf("i: %d, j: %d, resid: %f\n", i, j, resid);
 
-        u[i][j] = uold[i][j] - omega * resid;
-        error = error + resid * resid;
-      }
+    /////for (i = 1; i < (n - 1); i++)
+    /////  for (j = 1; j < (m - 1); j++) {
+    /////    resid =
+    /////        (ax * (uold[i - 1][j] + uold[i + 1][j]) + ay * (uold[i][j - 1] + uold[i][j + 1]) + b * uold[i][j] - f[i][j])
+    //// b;
+    /////    // printf("i: %d, j: %d, resid: %f\n", i, j, resid);
+    /////
+    /////    u[i][j] = uold[i][j] - omega * resid;
+    /////    error = error + resid * resid;
+    /////  }
 
     /* TODO #2.c: compute the global error using MPI_Allreduce or
      * MPI_Reduce+MPI_Bcast
      */
-    MPI_Allreduce(&error, &gerror, numprocs, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+    //////MPI_Allreduce(&error, &gerror, numprocs, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
 
     if (myrank == 0) {
       if (k % 500 == 0) printf("Finished %ld iteration with error: %g\n", k, error);
 
       gerror = sqrt(gerror) / (n * m);
-      k = k + 1;
     }
+    k = k + 1;
   } /*  End iteration loop */
-  printf("Total Number of Iterations: %ld\n", k);
-  printf("Residual: %.15g\n", gerror);
+
+  if (myrank == 0) {
+    printf("Total Number of Iterations: %ld\n", k);
+    printf("Residual: %.15g\n", gerror);
+  }
 }
