@@ -248,7 +248,7 @@ int main(int argc, char *argv[]) {
          num_threads * flops / (1.0e3 * elapsed_omp),
          error_check(n, m, alpha, dx, dy, uomp, fomp));
   printf("---------------------------------------------------------\n");
-  printf("Speedup:\t%0.2f \%\n", 100 * (elapsed_omp / elapsed_seq));
+  printf("Speedup:\t%0.2f \%\n", (elapsed_seq / elapsed_omp));
 
   free(u);
   free(f);

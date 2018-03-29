@@ -77,7 +77,7 @@ int main(int argc, char **argv) {
   printf("hist_omp:\t%4f", elapsed_omp * 1.0e3);
   printf("\t\t%4f\n", (src.rows * src.cols * 3) / (elapsed_omp * 1.0e6));
   printf("-----------------------------------------------------------------\n");
-  printf("Speedup:\t\t\t%0.2f \%\n", 100 * (elapsed_omp / elapsed_seq));
+  printf("Speedup:\t\t\t%0.2f \%\n", (elapsed_seq / elapsed_omp));
 
   if (!batch) {
     show_hist(histogram_blue, histogram_green, histogram_red, "reg");

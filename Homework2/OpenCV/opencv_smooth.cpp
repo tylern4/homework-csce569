@@ -73,7 +73,7 @@ int main(int argc, char **argv) {
   printf("Filter smoothing:\t\t%4f\n", elapsed_smooth * 1.0e3);
   printf("Filter omp:\t\t\t%4f\n", elapsed_omp * 1.0e3);
   printf("-----------------------------------------------------------------\n");
-  printf("Speedup:\t\t\t%0.2f \%\n", 100 * (elapsed_omp / elapsed_smooth));
+  printf("Speedup:\t\t\t%0.2f \%\n", (elapsed_smooth / elapsed_omp));
 
   if (!batch) {
     namedWindow("Original Image", cv::WINDOW_AUTOSIZE);
@@ -130,7 +130,7 @@ void filter_smooth_omp(cv::Mat src, cv::Mat dst, short filter[3][3]) {
   unsigned int value[4];
 // parallel over the rows and columns of the so the calculation can be done
 // pixel by pixel
-#pragma omp parallel for private(i, j, value)
+#pragma omp parallel for collapse(2) private(i, j, value)
   for (j = 1; j < src.rows - 1; j++) {
     for (i = 1; i < src.cols - 1; i++) {
       for (x = 0; x < 4; x++) {
