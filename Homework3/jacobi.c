@@ -315,14 +315,14 @@ int main(int argc, char *argv[]) {
   } else {
     int recv_rank;
     for (recv_rank = 1; recv_rank < numprocs; recv_rank++) {
-      int rows_to_send_to_recv;
+      int rows_to_recv;
       if (recv_rank == numprocs - 1)
-        rows_to_send_to_recv = rows_to_process + 1;
+        rows_to_recv = rows_to_process + 1;
       else
-        rows_to_send_to_recv = rows_to_process + 2;
+        rows_to_recv = rows_to_process + 2;
 
-      MPI_Irecv(umpi, rows_to_send_to_recv * m, MPI_FLOAT, recv_rank, 0,
-                MPI_COMM_WORLD, &request);
+      MPI_Irecv(umpi, rows_to_recv * m, MPI_FLOAT, recv_rank, 0, MPI_COMM_WORLD,
+                &request);
     }
   }
 
@@ -464,7 +464,6 @@ void jacobi_mpi(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
   REAL(*u)[m] = (REAL(*)[m])u_p;
   REAL(*f)[m] = (REAL(*)[m])f_p;
 
-  //// recompute rows_to_process and num of rows from above
   /*
    * Initialize coefficients */
   /* X-direction coef */
@@ -475,6 +474,7 @@ void jacobi_mpi(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
   b = (((-2.0 / (dx * dx)) - (2.0 / (dy * dy))) - alpha);
   gerror = (10.0 * tol);
   k = 1;
+
   int rows_to_process = n / numprocs;
   if (myrank == 0 || myrank == numprocs - 1)
     n = rows_to_process + 1;
@@ -497,44 +497,42 @@ void jacobi_mpi(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
     for (i = 0; i < n; i++)
       for (j = 0; j < m; j++)
         uold[i][j] = u[i][j];
-    // printf("%ld\n", n);
-    // printf("Length of array = %ld\n", (sizeof(u_p) / sizeof(*u_p)));
-    // printf("Length of array = %ld\n", (sizeof(uold) / sizeof(*uold)));
 
     /* TODO #2.b: boundary exchange with neighbour process(es) using
      * MPI_Send/Recv.
      * The memory address of the boundary data should be correctly specified.
      */
-    if (myrank == 0) {
-      /*send last row to myrank==1*/
-      MPI_Isend(uold[0], m, MPI_FLOAT, myrank + 1, myrank + 1, MPI_COMM_WORLD,
-                &request);
-      /*recv last row from myrank==1*/
-      MPI_Irecv(u[0], m, MPI_FLOAT, myrank + 1, myrank, MPI_COMM_WORLD,
-                &request);
+    /*
+        if (myrank == 0) {
+          // send last row to myrank==1
+          MPI_Send(uold[(n - 1) * m], m, MPI_FLOAT, myrank + 1, myrank + 1,
+                   MPI_COMM_WORLD);
+          // recv last row from myrank==1
+          MPI_Recv(uold[(n - 1) * m], m, MPI_FLOAT, myrank + 1, myrank,
+                   MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-    } else if (myrank == numprocs - 1) {
-      /*send first row to numprocs-2*/
-      MPI_Isend(uold[0], m, MPI_FLOAT, numprocs - 2, numprocs - 2,
-                MPI_COMM_WORLD, &request);
-      /*recv first row from numprocs-2*/
-      MPI_Irecv(u[0], m, MPI_FLOAT, numprocs - 2, myrank, MPI_COMM_WORLD,
-                &request);
-    } else {
-      /*send last row to myrank+1*/
-      MPI_Isend(uold[0], m, MPI_FLOAT, myrank + 1, myrank + 1, MPI_COMM_WORLD,
-                &request);
-      /*recv last row from myrank+1*/
-      MPI_Irecv(u[0], m, MPI_FLOAT, myrank - 1, myrank, MPI_COMM_WORLD,
-                &request);
-      /*send first row to myrank-1*/
-      MPI_Isend(uold[0], m, MPI_FLOAT, myrank - 1, myrank - 1, MPI_COMM_WORLD,
-                &request);
-      /*recv first row from myrank-1*/
-      MPI_Irecv(u[0], m, MPI_FLOAT, myrank - 1, myrank, MPI_COMM_WORLD,
-                &request);
-    }
-
+        } else if (myrank == numprocs - 1) {
+          // send first row to numprocs-2
+          MPI_Send(uold[0], m, MPI_FLOAT, numprocs - 2, numprocs - 2,
+                   MPI_COMM_WORLD);
+          // recv first row from numprocs-2
+          MPI_Recv(uold[0], m, MPI_FLOAT, numprocs - 2, myrank, MPI_COMM_WORLD,
+                   MPI_STATUS_IGNORE);
+        } else {
+          // send last row to myrank+1
+          MPI_Send(uold[(n - 1) * m], m, MPI_FLOAT, myrank + 1, myrank + 1,
+                   MPI_COMM_WORLD);
+          // recv last row from myrank+1
+          MPI_Recv(uold[(n - 1) * m], m, MPI_FLOAT, myrank - 1, myrank,
+                   MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+          // send first row to myrank-1
+          MPI_Send(uold[0], m, MPI_FLOAT, myrank - 1, myrank - 1,
+       MPI_COMM_WORLD);
+          // recv first row from myrank-1
+          MPI_Recv(uold[0], m, MPI_FLOAT, myrank - 1, myrank, MPI_COMM_WORLD,
+                   MPI_STATUS_IGNORE);
+        }
+    */
     for (i = 1; i < (n - 1); i++)
       for (j = 1; j < (m - 1); j++) {
         resid = (ax * (uold[i - 1][j] + uold[i + 1][j]) +
@@ -545,8 +543,6 @@ void jacobi_mpi(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
 
         u[i][j] = uold[i][j] - omega * resid;
         error = error + resid * resid;
-        //////printf("%d Finished %ld iteration with error: %g\n", myrank, k,
-        /// error);
       }
 
     /* TODO #2.c: compute the global error using MPI_Allreduce or
