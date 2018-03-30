@@ -502,37 +502,36 @@ void jacobi_mpi(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
      * MPI_Send/Recv.
      * The memory address of the boundary data should be correctly specified.
      */
-    /*
-        if (myrank == 0) {
-          // send last row to myrank==1
-          MPI_Send(uold[(n - 1) * m], m, MPI_FLOAT, myrank + 1, myrank + 1,
-                   MPI_COMM_WORLD);
-          // recv last row from myrank==1
-          MPI_Recv(uold[(n - 1) * m], m, MPI_FLOAT, myrank + 1, myrank,
-                   MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-        } else if (myrank == numprocs - 1) {
-          // send first row to numprocs-2
-          MPI_Send(uold[0], m, MPI_FLOAT, numprocs - 2, numprocs - 2,
-                   MPI_COMM_WORLD);
-          // recv first row from numprocs-2
-          MPI_Recv(uold[0], m, MPI_FLOAT, numprocs - 2, myrank, MPI_COMM_WORLD,
-                   MPI_STATUS_IGNORE);
-        } else {
-          // send last row to myrank+1
-          MPI_Send(uold[(n - 1) * m], m, MPI_FLOAT, myrank + 1, myrank + 1,
-                   MPI_COMM_WORLD);
-          // recv last row from myrank+1
-          MPI_Recv(uold[(n - 1) * m], m, MPI_FLOAT, myrank - 1, myrank,
-                   MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-          // send first row to myrank-1
-          MPI_Send(uold[0], m, MPI_FLOAT, myrank - 1, myrank - 1,
-       MPI_COMM_WORLD);
-          // recv first row from myrank-1
-          MPI_Recv(uold[0], m, MPI_FLOAT, myrank - 1, myrank, MPI_COMM_WORLD,
-                   MPI_STATUS_IGNORE);
-        }
-    */
+    if (myrank == 0) {
+      // send last row to myrank==1
+      MPI_Send(uold[(n - 1) * m], m, MPI_FLOAT, myrank + 1, myrank + 1,
+               MPI_COMM_WORLD);
+      // recv last row from myrank==1
+      MPI_Recv(uold[(n - 1) * m], m, MPI_FLOAT, myrank + 1, myrank,
+               MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+    } else if (myrank == numprocs - 1) {
+      // send first row to numprocs-2
+      MPI_Send(uold[0], m, MPI_FLOAT, numprocs - 2, numprocs - 2,
+               MPI_COMM_WORLD);
+      // recv first row from numprocs-2
+      MPI_Recv(uold[0], m, MPI_FLOAT, numprocs - 2, myrank, MPI_COMM_WORLD,
+               MPI_STATUS_IGNORE);
+    } else {
+      // send last row to myrank+1
+      MPI_Send(uold[(n - 1) * m], m, MPI_FLOAT, myrank + 1, myrank + 1,
+               MPI_COMM_WORLD);
+      // recv last row from myrank+1
+      MPI_Recv(uold[(n - 1) * m], m, MPI_FLOAT, myrank - 1, myrank,
+               MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      // send first row to myrank-1
+      MPI_Send(uold[0], m, MPI_FLOAT, myrank - 1, myrank - 1, MPI_COMM_WORLD);
+      // recv first row from myrank-1
+      MPI_Recv(uold[0], m, MPI_FLOAT, myrank - 1, myrank, MPI_COMM_WORLD,
+               MPI_STATUS_IGNORE);
+    }
+
     for (i = 1; i < (n - 1); i++)
       for (j = 1; j < (m - 1); j++) {
         resid = (ax * (uold[i - 1][j] + uold[i + 1][j]) +
