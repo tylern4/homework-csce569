@@ -34,49 +34,112 @@
 \maketitle
 
 \section*{Jacobi Iterative Method}
-
+There are three separate parts where the sequential version of the Jacobi method must be modified in order to make it parallel. The first thing that needs to be modified is to take the full matrix and decompose it by rows.
 
 \begin{lstlisting}[language=C++]
-while ((k <= mits) && (error > tol)) {
-  error = 0.0;
-#pragma omp parallel
-  {
-/* Copy new solution into old */
-#pragma omp for private(i, j)
-   for (i = 0; i < n; i++)
-     for (j = 0; j < m; j++)
-       uold[i][j] = u[i][j];
-#pragma omp for private(i, j) reduction(+ : error)
-   for (i = 1; i < (n - 1); i++) {
-     for (j = 1; j < (m - 1); j++) {
-       resid = (ax * (uold[i - 1][j] + uold[i + 1][j]) +
-               ay * (uold[i][j - 1] + uold[i][j + 1]) + b * uold[i][j] -
-               f[i][j]) / b;
+  int rows_to_send;
+  int rows_to_process = n / numprocs;
+  if (myrank == 0 || myrank == numprocs - 1)
+    rows_to_send = rows_to_process + 1;
+  else
+    rows_to_send = rows_to_process + 2;
+  if (myrank == 0) {
+    int send_to_rank;
+    for (send_to_rank = 1; send_to_rank < numprocs; send_to_rank++) {
+      int num_sending;
+      if (send_to_rank == numprocs - 1)
+        num_sending = rows_to_process + 1;
+      else
+        num_sending = rows_to_process + 2;
+      uptr = umpi + (send_to_rank * rows_to_process - 1) * m;
+      fptr = fmpi + (send_to_rank * rows_to_process - 1) * m;
 
-       u[i][j] = uold[i][j] - omega * resid;
-       error = error + resid * resid;
-      }
-   }
-#pragma omp single nowait
-   {
-     if (k % 500 == 0)
-       printf("Finished %ld iteration with error: %g\n", k, error);
-
-     error = sqrt(error) / (n * m);
-     k = k + 1;
+      MPI_Isend(uptr, num_sending * m, MPI_FLOAT, send_to_rank, send_to_rank,
+                MPI_COMM_WORLD, &request);
+      MPI_Isend(fptr, num_sending * m, MPI_FLOAT, send_to_rank, send_to_rank,
+                MPI_COMM_WORLD, &request);
     }
-  } // End omp parallel region
-}
+  } else {
+    umpi = malloc(rows_to_send * m * sizeof(REAL));
+    fmpi = malloc(rows_to_send * m * sizeof(REAL));
+    MPI_Irecv(umpi, rows_to_send * m, MPI_FLOAT, 0, myrank, MPI_COMM_WORLD,
+              &request);
+    MPI_Irecv(fmpi, rows_to_send * m, MPI_FLOAT, 0, myrank, MPI_COMM_WORLD,
+              &request);
+  }
 \end{lstlisting}
 
-\pagebreak
-\begin{figure}[h]
-%\subfigure[Execution time]{\includegraphics[scale=0.3]{bars.png}}
-\vfill
-%\subfigure[Speedup]{\includegraphics[scale=0.3]{lines.png}}
-\caption{Performance Graphs}
-\end{figure}
+Once the matrix is splint and sent to all the processes the Jacobi method is called by all the processes on their respective matrix part. In the Jacobi method the boundary rows must be exchanged between processes and requires a second set of mpi calls. The last row of one section must exchanged with the first row of the adjacent section. To do this the first row, $uold[0]$, was exchanged with the last row $uold[(n-1)*m]$.
 
+\begin{lstlisting}[language=C++]
+    if (myrank == 0) {
+      // send last row to myrank==1
+      MPI_Send(uold[(n - 1) * m], m, MPI_FLOAT, myrank + 1, myrank + 1,
+               MPI_COMM_WORLD);
+      // recv last row from myrank==1
+      MPI_Recv(uold[(n - 1) * m], m, MPI_FLOAT, myrank + 1, myrank,
+               MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+    } else if (myrank == numprocs - 1) {
+      // send first row to numprocs-2
+      MPI_Send(uold[0], m, MPI_FLOAT, numprocs - 2, numprocs - 2,
+               MPI_COMM_WORLD);
+      // recv first row from numprocs-2
+      MPI_Recv(uold[0], m, MPI_FLOAT, numprocs - 2, myrank, MPI_COMM_WORLD,
+               MPI_STATUS_IGNORE);
+    } else {
+      // send last row to myrank+1
+      MPI_Send(uold[(n - 1) * m], m, MPI_FLOAT, myrank + 1, myrank + 1,
+               MPI_COMM_WORLD);
+      // recv last row from myrank+1
+      MPI_Recv(uold[(n - 1) * m], m, MPI_FLOAT, myrank - 1, myrank,
+               MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+      // send first row to myrank-1
+      MPI_Send(uold[0], m, MPI_FLOAT, myrank - 1, myrank - 1, MPI_COMM_WORLD);
+      // recv first row from myrank-1
+      MPI_Recv(uold[0], m, MPI_FLOAT, myrank - 1, myrank, MPI_COMM_WORLD,
+               MPI_STATUS_IGNORE);
+    }
+\end{lstlisting}
+
+This is where my program fails when running. It gives errors that the memory address is not set properly that I was not able to diagnose and solve.
+
+After this the iterative method was performed by each process on it's respective section of the matrix. The error was computed for each section and then was added back together with and MPI\_Allreduce call.
+
+\begin{lstlisting}[language=C++]
+MPI_Allreduce(&error, &gerror, 1, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
+\end{lstlisting}
+
+After the iterations was completed the results were compiled back together, similar to the first step but in reverse.
+
+\begin{lstlisting}[language=C++]
+  if (myrank != 0) {
+    int num_sending;
+    if (myrank == numprocs - 1)
+      num_sending = rows_to_process + 1;
+    else
+      num_sending = rows_to_process + 2;
+
+    MPI_Isend(uptr, num_sending * m, MPI_FLOAT, 0, myrank, MPI_COMM_WORLD,
+              &request);
+  } else {
+    int recv_rank;
+    for (recv_rank = 1; recv_rank < numprocs; recv_rank++) {
+      int rows_to_recv;
+      if (recv_rank == numprocs - 1)
+        rows_to_recv = rows_to_process + 1;
+      else
+        rows_to_recv = rows_to_process + 2;
+
+      MPI_Irecv(umpi, rows_to_recv * m, MPI_FLOAT, recv_rank, 0, MPI_COMM_WORLD,
+                &request);
+    }
+  }
+\end{lstlisting}
+
+With more time I would solve the issue with the memory addresses issue and be able to test on bridges to get timing information.
+
+\pagebreak
 
 \end{document}
               
