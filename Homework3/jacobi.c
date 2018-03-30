@@ -548,9 +548,7 @@ void jacobi_mpi(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
     /* TODO #2.c: compute the global error using MPI_Allreduce or
      * MPI_Reduce+MPI_Bcast
      */
-    MPI_Barrier(MPI_COMM_WORLD);
-    //////printf("%d Finished %ld iteration with error: %g\n", myrank, k,
-    /// error);
+    // MPI_Barrier(MPI_COMM_WORLD);
     MPI_Allreduce(&error, &gerror, 1, MPI_FLOAT, MPI_SUM, MPI_COMM_WORLD);
 
     if (myrank == 0) {
