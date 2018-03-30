@@ -215,7 +215,6 @@ int main(int argc, char *argv[]) {
 
     memcpy(umpi, u, n * m * sizeof(REAL));
     memcpy(fmpi, f, n * m * sizeof(REAL));
-
     printf("================= Sequential Execution =================\n");
 
     elapsed_seq = read_timer_ms();
@@ -454,6 +453,12 @@ void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
 void jacobi_mpi(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
                 REAL *u_p, REAL *f_p, REAL tol, int mits) {
 
+  int rows_to_process = n / numprocs;
+  if (myrank == 0 || myrank == numprocs - 1)
+    n = rows_to_process + 1;
+  else
+    n = rows_to_process + 2;
+
   long i, j, k;
   REAL error, gerror;
   REAL ax;
@@ -475,15 +480,8 @@ void jacobi_mpi(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
   gerror = (10.0 * tol);
   k = 1;
 
-  int rows_to_process = n / numprocs;
-  if (myrank == 0 || myrank == numprocs - 1)
-    n = rows_to_process + 1;
-  else
-    n = rows_to_process + 2;
-
   while ((k <= mits) && (gerror > tol)) {
     error = 0.0;
-
     /* Copy new solution into old */
     /* TODO #2.a: since u and f are pointers to the subarray that contains
      * boundary data, you will need to
