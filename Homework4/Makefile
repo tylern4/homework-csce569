@@ -1,7 +1,8 @@
-CC = nvcc
-CCFLAGS = -w -Xcompiler -fopenmp
+CC = nvcc -ccbin clang-3.8
+CCFLAGS = -arch=sm_52 -gencode=arch=compute_52,code=sm_52 -Xcompiler -fopenmp
 LINKS = -lm -lpthread -lcublas
-PROG = $(patsubst %.cu,%,$(wildcard *.cu))
+PROG = matmul
+#$(patsubst %.cu,%,$(wildcard *.cu))
 
 .PHONY: all clean
 
