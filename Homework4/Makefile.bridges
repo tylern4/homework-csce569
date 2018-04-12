@@ -1,0 +1,15 @@
+CC = nvcc
+CCFLAGS = -arch=sm_60 -gencode=arch=compute_60,code=sm_60 -gencode=arch=compute_37,code=sm_37 -Xcompiler -fopenmp
+LINKS = -lm -lpthread -lcublas
+PROG = matmul
+#$(patsubst %.cu,%,$(wildcard *.cu))
+
+.PHONY: all clean
+
+all: $(PROG)
+
+$(PROG): %: %.cu
+	$(CC) -O3 $(CCFLAGS) -o $@ $< $(LINKS)
+
+clean:
+	rm -f $(PROG)
