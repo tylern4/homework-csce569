@@ -9,6 +9,7 @@
 #include <sys/timeb.h>
 #include <string.h>
 #include <cublas_v2.h>
+#include <cuda.h>
 
 #define REAL float
 #define BLOCK_SIZE 16
@@ -58,6 +59,7 @@ void matmul_openmp(int N, REAL *A, REAL *B, REAL *C, int num_tasks);
 void matmul_cuda_v1_vanilla(int N, REAL *A, REAL *B, REAL *C);
 void matmul_cuda_v2_shmem(int N, REAL *A, REAL *B, REAL *C);
 void matmul_cuda_v3_cublas(int N, REAL *A, REAL *B, REAL *C);
+void cublas_v3_1(int N, REAL *A, REAL *B, REAL *C);
 
 int main(int argc, char *argv[]) {
   int N;
@@ -104,7 +106,8 @@ int main(int argc, char *argv[]) {
   // TODO: call and time for matmul_cuda_v1_shmem(int N, REAL *A, REAL *B, REAL
   // *C);
   elapsed_cuda_v2 = read_timer();
-  matmul_cuda_v2_shmem(N, A, B, C_v2);
+  cublas_v3_1(N, A, B, C_v2);
+  // matmul_cuda_v2_shmem(N, A, B, C_v2);
   elapsed_cuda_v2 = (read_timer() - elapsed_cuda_v2);
 
   // TODO: call and time for matmul_cuda_v1_cublas(int N, REAL *A, REAL *B, REAL
@@ -117,7 +120,7 @@ int main(int argc, char *argv[]) {
   printf("Matrix Multiplication: A[M][K] * B[k][N] = C[M][N]\n");
   printf("\tM=K=N=%d, %d threads/tasks\n", N, num_tasks);
   printf("---------------------------------------------------------------\n");
-  printf("Performance:\tRuntime (ms)\t MFLOPS\tError (compared to base)\n");
+  printf("Performance:\tRuntime (ms)\t MFLOPS\t\tError\n");
   printf("---------------------------------------------------------------\n");
   printf("matmul_base:\t%4f\t%4f\t%g\n", elapsed_base * 1.0e3,
          ((((2.0 * N) * N) * N) / (1.0e6 * elapsed_base)),
@@ -219,24 +222,118 @@ void matmul_cuda_v1_vanilla(int N, REAL *A, REAL *B, REAL *C) {
 /**
   * TODO: kernel implementation
   */
-__global__ void matmul_cuda_v2_shmem_kernel(int N, REAL *A, REAL *B, REAL *C) {}
+
+// Get a matrix element
+__device__ float GetElement(REAL *A, int row, int col, int N) {
+  return A[row * N + col];
+}
+
+// Set a matrix element
+__device__ void SetElement(REAL *A, int row, int col, int N, REAL value) {
+  A[row * N + col] = value;
+}
+
+__device__ REAL *GetSubMatrix(REAL *A, int row, int col, int N) {
+  REAL *Asub = (REAL *)malloc(N * N * sizeof(REAL));
+  Asub = &A[N * BLOCK_SIZE * row + BLOCK_SIZE * col];
+  return Asub;
+}
+
+__global__ void matmul_cuda_v2_shmem_kernel(int N, REAL *A, REAL *B, REAL *C) {
+  /*
+  // Block row and column
+  int blockRow = blockIdx.y;
+  int blockCol = blockIdx.x;
+
+  // Each thread block computes one sub-matrix Csub of C
+  REAL *C_sub = GetSubMatrix(C, blockRow, blockCol, N);
+
+  // Each thread computes one element of Csub
+  // by accumulating results into Cvalue
+  float Cvalue = 0;
+
+  // Thread row and column within Csub
+  int row = threadIdx.y;
+  int col = threadIdx.x;
+
+  // Loop over all the sub-matrices of A and B that are
+  // required to compute Csub
+  // Multiply each pair of sub-matrices together
+  // and accumulate the results
+  for (int m = 0; m < (N / BLOCK_SIZE); ++m) {
+
+    // Get sub-matrix Asub of A
+    REAL *A_sub = GetSubMatrix(A, blockRow, m, N);
+
+    // Get sub-matrix Bsub of B
+    REAL *B_sub = GetSubMatrix(B, m, blockCol, N);
+
+    // Shared memory used to store Asub and Bsub respectively
+    __shared__ REAL As[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ REAL Bs[BLOCK_SIZE][BLOCK_SIZE];
+
+    // Load Asub and Bsub from device memory to shared memory
+    // Each thread loads one element of each sub-matrix
+    As[row][col] = GetElement(A_sub, row, col, N);
+    Bs[row][col] = GetElement(B_sub, row, col, N);
+
+    // Synchronize to make sure the sub-matrices are loaded
+    // before starting the computation
+    __syncthreads();
+    // Multiply Asub and Bsub together
+    for (int e = 0; e < BLOCK_SIZE; ++e)
+      Cvalue += As[row][e] * Bs[e][col];
+
+    __syncthreads();
+  }
+
+  // Write Csub to device memory
+  // Each thread writes one element
+  SetElement(C_sub, row, col, Cvalue, N);
+  */
+}
 /*
  * call to kernel that use GPU shared memory
  */
-void matmul_cuda_v2_shmem(int N, REAL *A, REAL *B, REAL *C) {}
+void matmul_cuda_v2_shmem(int N, REAL *A, REAL *B, REAL *C) {
+  // Determine size of matrix
+  size_t size = N * N * sizeof(REAL);
+
+  // Make cuda matricies
+  REAL *cuda_A = (REAL *)malloc(size);
+  REAL *cuda_B = (REAL *)malloc(size);
+  REAL *cuda_C = (REAL *)malloc(size);
+
+  // Copy A to cuda memory
+  cudaMalloc(&cuda_A, size);
+  cudaMemcpy(cuda_A, A, size, cudaMemcpyHostToDevice);
+
+  // Copy B to cuda memory
+  cudaMalloc(&cuda_B, size);
+  cudaMemcpy(cuda_B, B, size, cudaMemcpyHostToDevice);
+
+  // Allocate C to cuda memory
+  cudaMalloc(&cuda_C, size);
+
+  dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
+  dim3 dimGrid(N / dimBlock.x, N / dimBlock.y);
+  matmul_cuda_v2_shmem_kernel << <dimGrid, dimBlock>>>
+      (N, cuda_A, cuda_B, cuda_C);
+
+  cudaMemcpy(C, cuda_C, size, cudaMemcpyDeviceToHost);
+
+  cudaFree(cuda_A);
+  cudaFree(cuda_B);
+  cudaFree(cuda_C);
+}
 
 /*
  * call to sgemm of cublas library
  */
 void matmul_cuda_v3_cublas(int N, REAL *A, REAL *B, REAL *C) {
-
-  float alf = 1;
-  float bet = 0;
-  float *alpha = &alf;
-  float *beta = &bet;
-
-  // Determine size of matrix
-  size_t size = N * N * sizeof(REAL);
+  int size = N * N * sizeof(REAL);
+  REAL alpha = 1.0f;
+  REAL beta = 0.0f;
 
   // Make cuda matricies
   REAL *cuda_A = (REAL *)malloc(size);
@@ -257,14 +354,43 @@ void matmul_cuda_v3_cublas(int N, REAL *A, REAL *B, REAL *C) {
   cublasHandle_t handle;
   cublasCreate(&handle);
 
-  cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, N, N, alpha, cuda_A, N,
-              cuda_B, N, beta, cuda_C, N);
-
-  cublasDestroy(handle);
+  cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, N, N, &alpha, cuda_A, N,
+              cuda_B, N, &beta, cuda_C, N);
 
   cudaMemcpy(C, cuda_C, size, cudaMemcpyDeviceToHost);
 
   cudaFree(cuda_A);
   cudaFree(cuda_B);
   cudaFree(cuda_C);
+  cublasDestroy(handle);
+}
+
+void cublas_v3_1(int N, REAL *A, REAL *B, REAL *C) {
+  int size = N * N * sizeof(REAL);
+  REAL *cuda_A;
+  REAL *cuda_B;
+  REAL *cuda_C;
+
+  REAL alpha = 1.0f;
+  REAL beta = 0.0f;
+  cublasHandle_t handle;
+  cublasCreate(&handle);
+
+  cudaMalloc(&cuda_A, size);
+  cudaMalloc(&cuda_B, size);
+  cudaMalloc(&cuda_C, size);
+
+  cublasSetMatrix(N, N, sizeof(REAL), A, N, cuda_A, N);
+  cublasSetMatrix(N, N, sizeof(REAL), B, N, cuda_B, N);
+  cublasSetMatrix(N, N, sizeof(REAL), C, N, cuda_C, N);
+
+  cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, N, N, &alpha, cuda_A, N,
+              cuda_B, N, &beta, cuda_C, N);
+
+  cublasGetMatrix(N, N, sizeof(REAL), cuda_C, N, C, N);
+
+  cudaFree(cuda_A);
+  cudaFree(cuda_B);
+  cudaFree(cuda_C);
+  cublasDestroy(handle);
 }
