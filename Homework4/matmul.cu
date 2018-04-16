@@ -76,6 +76,9 @@ int main(int argc, char *argv[]) {
   if (argc > 3)
     task = atoi(argv[3]);
 
+  cudaDeviceProp deviceProp;
+  cudaGetDeviceProperties(&deviceProp, 0);
+
   REAL *heap_buffer = (REAL *)malloc(sizeof(REAL) * N * N * 7);
   /* we use 5 matrix in this example */
   /* below is a cast from memory buffer to a 2-d row-major array */
@@ -86,6 +89,11 @@ int main(int argc, char *argv[]) {
   REAL *C_v1 = &heap_buffer[4 * N * N];
   REAL *C_v2 = &heap_buffer[5 * N * N];
   REAL *C_v3 = &heap_buffer[6 * N * N];
+
+  // Little temp vairialbe to get the cuda driver loaded once instead of in the
+  // function call
+  REAL *cuda_temp = (REAL *)malloc(sizeof(REAL));
+  cudaMalloc(&cuda_temp, (sizeof(REAL)));
 
   srand48((1 << 12));
   init(N, N, A);
@@ -123,6 +131,7 @@ int main(int argc, char *argv[]) {
     printf("===============================================================\n");
     printf("Matrix Multiplication: A[M][K] * B[k][N] = C[M][N]\n");
     printf("\tM=K=N=%d, %d threads/tasks\n", N, num_tasks);
+    printf("Running GPU tests on: %s\n", deviceProp.name);
     printf("---------------------------------------------------------------\n");
     printf("Performance:\tRuntime (ms)\t MFLOPS\t\tError\n");
     printf("---------------------------------------------------------------\n");
@@ -211,7 +220,7 @@ int main(int argc, char *argv[]) {
            ((((2.0 * N) * N) * N) / (1.0e6 * elapsed_cuda_v3)));
     break;
   }
-
+  cudaFree(cuda_temp);
   free(heap_buffer);
   return 0;
 }
@@ -297,31 +306,33 @@ void matmul_cuda_v1_vanilla(int N, REAL *A, REAL *B, REAL *C) {
 /**
   * TODO: kernel implementation
   */
-
 // Get a matrix element
 __device__ float GetElement(REAL *A, int row, int col, int N) {
   return A[row * N + col];
 }
 
 // Set a matrix element
-__device__ void SetElement(REAL *A, int row, int col, int N, REAL value) {
+__device__ void SetElement(REAL *A, int row, int col, int N, float value) {
   A[row * N + col] = value;
 }
 
+// Get the BLOCK_SIZExBLOCK_SIZE sub-matrix Asub of A that is
+// located col sub-matrices to the right and row sub-matrices down
+// from the upper-left corner of A
 __device__ REAL *GetSubMatrix(REAL *A, int row, int col, int N) {
-  REAL *Asub = (REAL *)malloc(N * N * sizeof(REAL));
+  REAL *Asub;
   Asub = &A[N * BLOCK_SIZE * row + BLOCK_SIZE * col];
   return Asub;
 }
 
+// Forward declaration of the matrix multiplication kernel
 __global__ void matmul_cuda_v2_shmem_kernel(int N, REAL *A, REAL *B, REAL *C) {
-
   // Block row and column
   int blockRow = blockIdx.y;
   int blockCol = blockIdx.x;
 
   // Each thread block computes one sub-matrix Csub of C
-  REAL *C_sub = GetSubMatrix(C, blockRow, blockCol, N);
+  REAL *Csub = GetSubMatrix(C, blockRow, blockCol, N);
 
   // Each thread computes one element of Csub
   // by accumulating results into Cvalue
@@ -338,19 +349,19 @@ __global__ void matmul_cuda_v2_shmem_kernel(int N, REAL *A, REAL *B, REAL *C) {
   for (int m = 0; m < (N / BLOCK_SIZE); ++m) {
 
     // Get sub-matrix Asub of A
-    REAL *A_sub = GetSubMatrix(A, blockRow, m, N);
+    REAL *Asub = GetSubMatrix(A, blockRow, m, N);
 
     // Get sub-matrix Bsub of B
-    REAL *B_sub = GetSubMatrix(B, m, blockCol, N);
+    REAL *Bsub = GetSubMatrix(B, m, blockCol, N);
 
     // Shared memory used to store Asub and Bsub respectively
-    __shared__ REAL As[BLOCK_SIZE][BLOCK_SIZE];
-    __shared__ REAL Bs[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ float As[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ float Bs[BLOCK_SIZE][BLOCK_SIZE];
 
     // Load Asub and Bsub from device memory to shared memory
     // Each thread loads one element of each sub-matrix
-    As[row][col] = GetElement(A_sub, row, col, N);
-    Bs[row][col] = GetElement(B_sub, row, col, N);
+    As[row][col] = GetElement(Asub, row, col, N);
+    Bs[row][col] = GetElement(Bsub, row, col, N);
 
     // Synchronize to make sure the sub-matrices are loaded
     // before starting the computation
@@ -359,43 +370,42 @@ __global__ void matmul_cuda_v2_shmem_kernel(int N, REAL *A, REAL *B, REAL *C) {
     for (int e = 0; e < BLOCK_SIZE; ++e)
       Cvalue += As[row][e] * Bs[e][col];
 
+    // Synchronize to make sure that the preceding
+    // computation is done before loading two new
+    // sub-matrices of A and B in the next iteration
     __syncthreads();
   }
 
   // Write Csub to device memory
   // Each thread writes one element
-  SetElement(C_sub, row, col, Cvalue, N);
+  SetElement(Csub, row, col, N, Cvalue);
 }
-/*
- * call to kernel that use GPU shared memory
- */
-void matmul_cuda_v2_shmem(int N, REAL *A, REAL *B, REAL *C) {
-  // Determine size of matrix
-  size_t size = N * N * sizeof(REAL);
 
-  // Make cuda matricies
+// Matrix multiplication - Host code
+// Matrix dimensions are assumed to be multiples of BLOCK_SIZE
+void matmul_cuda_v2_shmem(int N, REAL *A, REAL *B, REAL *C) {
+  // Load A and B to device memory
+  int size = (N * N * sizeof(REAL));
   REAL *cuda_A = (REAL *)malloc(size);
   REAL *cuda_B = (REAL *)malloc(size);
   REAL *cuda_C = (REAL *)malloc(size);
-
-  // Copy A to cuda memory
   cudaMalloc(&cuda_A, size);
   cudaMemcpy(cuda_A, A, size, cudaMemcpyHostToDevice);
-
-  // Copy B to cuda memory
   cudaMalloc(&cuda_B, size);
   cudaMemcpy(cuda_B, B, size, cudaMemcpyHostToDevice);
 
-  // Allocate C to cuda memory
   cudaMalloc(&cuda_C, size);
 
+  // Invoke kernel
   dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
   dim3 dimGrid(N / dimBlock.x, N / dimBlock.y);
   matmul_cuda_v2_shmem_kernel << <dimGrid, dimBlock>>>
       (N, cuda_A, cuda_B, cuda_C);
 
+  // Read C from device memory
   cudaMemcpy(C, cuda_C, size, cudaMemcpyDeviceToHost);
 
+  // Free device memory
   cudaFree(cuda_A);
   cudaFree(cuda_B);
   cudaFree(cuda_C);
