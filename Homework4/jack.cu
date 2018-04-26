@@ -113,8 +113,8 @@ double error_check(long n, long m, REAL alpha, REAL dx, REAL dy, REAL *u_p,
   double error;
   error = 0.0;
   REAL(*u)[m] = (REAL(*)[m])u_p;
-  REAL(*f)[m] = (REAL(*)[m])f_p;
-  //#pragma omp parallel for private(xx,yy,temp,j,i) reduction(+:error)
+// REAL(*f)[m] = (REAL(*)[m])f_p;
+#pragma omp parallel for private(xx, yy, temp, j, i) reduction(+ : error)
   for (i = 0; i < n; i++)
     for (j = 0; j < m; j++) {
       xx = (-1.0 + (dx * (i - 1)));
@@ -349,8 +349,10 @@ void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
   REAL *resid = (REAL *)malloc((sizeof(REAL) * n * m));
   REAL *uold = (REAL *)malloc((sizeof(REAL) * n * m));
   REAL *temp;
-  REAL *u = u_p;
-  REAL *f = f_p;
+  REAL(*u)[m] = (REAL(*)[m])u_p;
+  REAL(*f)[m] = (REAL(*)[m])f_p;
+  // REAL *u = u_p;
+  // REAL *f = f_p;
 
   /*
    * Initialize coefficients */
@@ -394,7 +396,6 @@ void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
     temp = cuda_u;
     cuda_u = cuda_uold;
     cuda_uold = temp;
-
     /* TODO #5: launch jacobi_kernel */
     jacobi_kernel << <dimGrid, dimBlock>>>
         (n, m, ax, ay, b, omega, cuda_u, cuda_uold, cuda_resid, cuda_f);
@@ -408,17 +409,14 @@ void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
     *
  (http://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#atomic-functions
     */
-
     /* Error check */
     /* TODO #7: copy the error from GPU to CPU */
-    cudaMemcpy(&resid, cuda_resid, sizeof(REAL) * n * m,
-               cudaMemcpyDeviceToHost);
+    cudaMemcpy(resid, cuda_resid, size, cudaMemcpyDeviceToHost);
     for (i = 1; i < (n - 1); i++)
       for (j = 1; j < (m - 1); j++) {
         error = error + resid[i * n + j] * resid[i * n + j];
       }
 
-    printf("Error: %f\n", error);
     if (k % 500 == 0)
       printf("Finished %ld iteration with error: %g\n", k, error);
     error = sqrt(error) / (n * m);
