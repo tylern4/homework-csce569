@@ -209,11 +209,11 @@ void matmul_cuda_v1_vanilla(int N, REAL *A, REAL *B, REAL *C) {
 
   // Copy A to cuda memory
   cudaMalloc((void **)&cuda_A, size);
-  cudaMemcpyAsync(cuda_A, A, size, cudaMemcpyHostToDevice);
+  cudaMemcpy(cuda_A, A, size, cudaMemcpyHostToDevice);
 
   // Copy B to cuda memory
   cudaMalloc((void **)&cuda_B, size);
-  cudaMemcpyAsync(cuda_B, B, size, cudaMemcpyHostToDevice);
+  cudaMemcpy(cuda_B, B, size, cudaMemcpyHostToDevice);
 
   // Allocate C to cuda memory
   cudaMalloc((void **)&cuda_C, size);
@@ -223,7 +223,7 @@ void matmul_cuda_v1_vanilla(int N, REAL *A, REAL *B, REAL *C) {
   matmul_cuda_v1_vanilla_kernel << <dimGrid, dimBlock>>>
       (N, cuda_A, cuda_B, cuda_C);
 
-  cudaMemcpyAsync(C, cuda_C, size, cudaMemcpyDeviceToHost);
+  cudaMemcpy(C, cuda_C, size, cudaMemcpyDeviceToHost);
 
   cudaFree(cuda_A);
   cudaFree(cuda_B);
@@ -317,9 +317,9 @@ void matmul_cuda_v2_shmem(int N, REAL *A, REAL *B, REAL *C) {
   REAL *cuda_B = NULL;
   REAL *cuda_C = NULL;
   cudaMalloc((void **)&cuda_A, size);
-  cudaMemcpyAsync(cuda_A, A, size, cudaMemcpyHostToDevice);
+  cudaMemcpy(cuda_A, A, size, cudaMemcpyHostToDevice);
   cudaMalloc((void **)&cuda_B, size);
-  cudaMemcpyAsync(cuda_B, B, size, cudaMemcpyHostToDevice);
+  cudaMemcpy(cuda_B, B, size, cudaMemcpyHostToDevice);
 
   cudaMalloc((void **)&cuda_C, size);
 
@@ -330,7 +330,7 @@ void matmul_cuda_v2_shmem(int N, REAL *A, REAL *B, REAL *C) {
       (N, cuda_A, cuda_B, cuda_C);
 
   // Read C from device memory
-  cudaMemcpyAsync(C, cuda_C, size, cudaMemcpyDeviceToHost);
+  cudaMemcpy(C, cuda_C, size, cudaMemcpyDeviceToHost);
 
   // Free device memory
   cudaFree(cuda_A);

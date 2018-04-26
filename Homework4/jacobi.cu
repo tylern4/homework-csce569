@@ -113,6 +113,7 @@ double error_check(long n, long m, REAL alpha, REAL dx, REAL dy, REAL *u_p,
   double error;
   error = 0.0;
   REAL(*u)[m] = (REAL(*)[m])u_p;
+// REAL(*f)[m] = (REAL(*)[m])f_p;
 #pragma omp parallel for private(xx, yy, temp, j, i) reduction(+ : error)
   for (i = 0; i < n; i++)
     for (j = 0; j < m; j++) {
@@ -209,7 +210,7 @@ int main(int argc, char *argv[]) {
   cudaGetDeviceProperties(&deviceProp, 0);
   // Free speed
   REAL *cuda_temp = (REAL *)malloc(sizeof(REAL));
-  cudaMalloc((void **)&cuda_temp, (sizeof(REAL)));
+  cudaMalloc(&cuda_temp, (sizeof(REAL)));
 
   printf("===================== Sequential Execution =====================\n");
   double elapsed_seq = read_timer_ms();
@@ -239,7 +240,6 @@ int main(int argc, char *argv[]) {
          flops / (1.0e3 * elapsed_cuda),
          error_check(n, m, alpha, dx, dy, ucuda, fcuda));
 
-  cudaFree(cuda_temp);
   free(u);
   free(f);
   free(ucuda);
@@ -323,48 +323,34 @@ void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
  * TODO #1: jacobi_kernel implementation of the double-nested loop for
  * computation
  */
-
-// REAL resid = 0.0;
-// REAL *error = (REAL *)malloc(sizeof(REAL) * 32 * 32);
-// long i, j;
-/* for (i = 0; i < n; i++)
-for (j = 0; j < m; j++) {
-  error[i * n + j] = 0;
-  u[i * n + j] = 0;
-}
-*/
-/*
-  for (i = 1; i < (n - 1); i++)
-    for (j = 1; j < (m - 1); j++) {
-      resid = (ax * (uold[(i - 1) * n + j] + uold[(i + 1) * n + j]) +
-               ay * (uold[i * n + (j - 1)] + uold[i * n + (j + 1)]) +
-               b * uold[i * n + j] - f[i * n + j]) /
-              b;
-      u[i * n + j] = uold[i * n + j] - omega * resid;
-      error[i * n + j] += resid * resid;
-    }
-    */
-/*
-  for (i = 1; i < (n - 1); i++)
-    for (j = 1; j < (m - 1); j++)
-      *tot_error += error[i * n + j];
-*/
-
+//__constant__ REAL *cuda_f;
 __global__ void jacobi_kernel(long n, long m, REAL ax, REAL ay, REAL b,
-                              REAL omega, REAL *uold, REAL *u, REAL *f,
-                              REAL *tot_error) {
+                              REAL omega, REAL *u, REAL *uold, REAL *resid,
+                              REAL *cuda_f) {
+  long i, j;
+  i = blockIdx.x * blockDim.x + threadIdx.x;
+  j = blockIdx.y * blockDim.y + threadIdx.y;
 
-  *tot_error = 8;
+  if (i < n) {
+    if (j < n) {
+      resid[i * n + j] = (ax * (uold[(i - 1) * n + j] + uold[(i + 1) * n + j]) +
+                          ay * (uold[i * n + (j - 1)] + uold[i * n + (j + 1)]) +
+                          b * uold[i * n + j] - cuda_f[i * n + j]) /
+                         b;
+      u[i * n + j] = uold[i * n + j] - omega * resid[i * n + j];
+    }
+  }
 }
-
 void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
                  REAL *u_p, REAL *f_p, REAL tol, int mits) {
   long i, j, k;
-  REAL error, tot_error;
+  REAL error;
   REAL ax;
   REAL ay;
   REAL b;
-
+  REAL *resid = (REAL *)malloc((sizeof(REAL) * n * m));
+  REAL *uold = (REAL *)malloc((sizeof(REAL) * n * m));
+  REAL *temp;
   REAL(*u)[m] = (REAL(*)[m])u_p;
   REAL(*f)[m] = (REAL(*)[m])f_p;
 
@@ -378,18 +364,15 @@ void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
   b = (((-2.0 / (dx * dx)) - (2.0 / (dy * dy))) - alpha);
   error = (10.0 * tol);
   k = 1;
-  /* TODO #2: CUDA memory allocation for u, f and uold and copy data for u and
-   * f
+  /* TODO #2: CUDA memory allocation for u, f and uold and copy data for u and f
    * from host memory to GPU memory, depending on how error
-   * will be calculated (see below), a [n][m] array or a one-element array
-   * need
+   * will be calculated (see below), a [n][m] array or a one-element array need
    * to be allocated as well. */
   int size = (sizeof(REAL) * n * m);
-  REAL *uold = (REAL *)malloc(size);
-  REAL *cuda_u;    // = (REAL *)malloc(size);
-  REAL *cuda_f;    // = (REAL *)malloc(size);
-  REAL *cuda_uold; // = (REAL *)malloc(size);
-  REAL *cuda_tot_error;
+  REAL *cuda_u;
+  REAL *cuda_f;
+  REAL *cuda_uold;
+  REAL *cuda_resid;
 
   // Copy u to cuda memory
   cudaMalloc((void **)&cuda_u, size);
@@ -399,6 +382,7 @@ void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
   cudaMemcpy(cuda_f, f, size, cudaMemcpyHostToDevice);
 
   cudaMalloc((void **)&cuda_uold, size);
+  cudaMalloc((void **)&cuda_resid, size);
 
   /* TODO #4: set 16x16 threads/block and n/16 x m/16 blocks/grid for GPU
    * computation (assuming n and m are dividable by 16 */
@@ -407,35 +391,32 @@ void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
 
   while ((k <= mits) && (error > tol)) {
     error = 0.0;
+
     /* TODO #3: swap u and uold */
-    for (i = 0; i < n; i++)
-      for (j = 0; j < m; j++)
-        uold[i * n + j] = u[i][j];
-
-    cudaMemcpy(cuda_uold, uold, size, cudaMemcpyHostToDevice);
-
+    temp = cuda_u;
+    cuda_u = cuda_uold;
+    cuda_uold = temp;
     /* TODO #5: launch jacobi_kernel */
     jacobi_kernel << <dimGrid, dimBlock>>>
-        (n, m, ax, ay, b, omega, uold, u_p, f_p, &tot_error);
-
-    /* TODO #6: compute error on CPU or GPU. error is calculated by
-    * accumulating
+        (n, m, ax, ay, b, omega, cuda_u, cuda_uold, cuda_resid, cuda_f);
+    /* TODO #6: compute error on CPU or GPU. error is calculated by accumulating
     *          resid*resid computed by each thread. There are multiple
     * approaches to compute the error. E.g. 1). A array of resid[n][m]
     *          could be allocated and store the resid computed by each thread.
     * After the computation, all the resids in the array are
     *          accumulated on either CPU or GPU. 2). A simpler implementation
     * could be just using CUDA atomicAdd, check.
-    *          (http://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#atomic-functions
+    *
+ (http://docs.nvidia.com/cuda/cuda-c-programming-guide/index.html#atomic-functions
     */
-
-    cudaMemcpy(u, cuda_u, size, cudaMemcpyDeviceToHost);
-
     /* Error check */
     /* TODO #7: copy the error from GPU to CPU */
-    cudaMemcpy(&error, cuda_tot_error, sizeof(REAL), cudaMemcpyDeviceToHost);
+    cudaMemcpy(resid, cuda_resid, size, cudaMemcpyDeviceToHost);
+    for (i = 1; i < (n - 1); i++)
+      for (j = 1; j < (m - 1); j++) {
+        error = error + resid[i * n + j] * resid[i * n + j];
+      }
 
-    error = 1.0;
     if (k % 500 == 0)
       printf("Finished %ld iteration with error: %g\n", k, error);
     error = sqrt(error) / (n * m);
@@ -445,6 +426,7 @@ void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
   cudaFree(cuda_u);
   cudaFree(cuda_f);
   cudaFree(cuda_uold);
+  cudaFree(cuda_resid);
   printf("Total Number of Iterations: %ld\n", k);
   printf("Residual: %.15g\n", error);
 }
