@@ -72,8 +72,7 @@ void print_array(char *title, char *name, REAL *A, long n, long m) {
  * Assumes exact solution is u(x,y) = (1-x^2)*(1-y^2)
  *
  ******************************************************/
-void initialize(long n, long m, REAL alpha, REAL *dx, REAL *dy, REAL *u_p,
-                REAL *f_p) {
+void initialize(long n, long m, REAL alpha, REAL *dx, REAL *dy, REAL *u_p, REAL *f_p) {
   long i;
   long j;
   long xx;
@@ -91,8 +90,7 @@ void initialize(long n, long m, REAL alpha, REAL *dx, REAL *dy, REAL *u_p,
       xx = ((int)(-1.0 + (*dx * (i - 1))));
       yy = ((int)(-1.0 + (*dy * (j - 1))));
       u[i][j] = 0.0;
-      f[i][j] = (((((-1.0 * alpha) * (1.0 - (xx * xx))) * (1.0 - (yy * yy))) -
-                  (2.0 * (1.0 - (xx * xx)))) -
+      f[i][j] = (((((-1.0 * alpha) * (1.0 - (xx * xx))) * (1.0 - (yy * yy))) - (2.0 * (1.0 - (xx * xx)))) -
                  (2.0 * (1.0 - (yy * yy))));
     }
 }
@@ -103,8 +101,7 @@ void initialize(long n, long m, REAL alpha, REAL *dx, REAL *dy, REAL *u_p,
  * Checks error between numerical and exact solution
  *
  ************************************************************/
-double error_check(long n, long m, REAL alpha, REAL dx, REAL dy, REAL *u_p,
-                   REAL *f_p) {
+double error_check(long n, long m, REAL alpha, REAL dx, REAL dy, REAL *u_p, REAL *f_p) {
   int i;
   int j;
   REAL xx;
@@ -125,10 +122,8 @@ double error_check(long n, long m, REAL alpha, REAL dx, REAL dy, REAL *u_p,
   error = (sqrt(error) / (n * m));
   return error;
 }
-void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL relax,
-                REAL *u_p, REAL *f_p, REAL tol, int mits);
-void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL relax,
-                 REAL *u_p, REAL *f_p, REAL tol, int mits);
+void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL relax, REAL *u_p, REAL *f_p, REAL tol, int mits);
+void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL relax, REAL *u_p, REAL *f_p, REAL tol, int mits);
 
 int main(int argc, char *argv[]) {
   long n = DEFAULT_DIMSIZE;
@@ -169,23 +164,11 @@ int main(int argc, char *argv[]) {
   } else {
     fprintf(stderr, "Usage: jacobi [<n> <m> <alpha> <tol> <relax> <mits>]\n");
     fprintf(stderr, "\tn - grid dimension in x direction, default: %ld\n", n);
-    fprintf(
-        stderr,
-        "\tm - grid dimension in y direction, default: n if provided or %ld\n",
-        m);
-    fprintf(
-        stderr,
-        "\talpha - Helmholtz constant (always greater than 0.0), default: %g\n",
-        alpha);
-    fprintf(stderr,
-            "\ttol   - error tolerance for iterative solver, default: %g\n",
-            tol);
-    fprintf(stderr,
-            "\trelax - Successice over relaxation parameter, default: %g\n",
-            relax);
-    fprintf(stderr,
-            "\tmits  - Maximum iterations for iterative solver, default: %d\n",
-            mits);
+    fprintf(stderr, "\tm - grid dimension in y direction, default: n if provided or %ld\n", m);
+    fprintf(stderr, "\talpha - Helmholtz constant (always greater than 0.0), default: %g\n", alpha);
+    fprintf(stderr, "\ttol   - error tolerance for iterative solver, default: %g\n", tol);
+    fprintf(stderr, "\trelax - Successice over relaxation parameter, default: %g\n", relax);
+    fprintf(stderr, "\tmits  - Maximum iterations for iterative solver, default: %d\n", mits);
   }
 
   printf("jacobi %ld %ld %g %g %g %d\n", n, m, alpha, tol, relax, mits);
@@ -234,10 +217,9 @@ int main(int argc, char *argv[]) {
   printf("---------------------------------------------------------------\n");
   printf("Performance:\tRuntime(ms)\tMFLOPS\t\tError\n");
   printf("---------------------------------------------------------------\n");
-  printf("base:\t\t%.2f\t\t%.2f\t\t%g\n", elapsed_seq,
-         flops / (1.0e3 * elapsed_seq), error_check(n, m, alpha, dx, dy, u, f));
-  printf("GPU :\t\t%.2f\t\t%.2f\t\t%g\n", elapsed_cuda,
-         flops / (1.0e3 * elapsed_cuda),
+  printf("base:\t\t%.2f\t\t%.2f\t\t%g\n", elapsed_seq, flops / (1.0e3 * elapsed_seq),
+         error_check(n, m, alpha, dx, dy, u, f));
+  printf("GPU :\t\t%.2f\t\t%.2f\t\t%g\n", elapsed_cuda, flops / (1.0e3 * elapsed_cuda),
          error_check(n, m, alpha, dx, dy, ucuda, fcuda));
 
   free(u);
@@ -268,8 +250,7 @@ int main(int argc, char *argv[]) {
  *
  * Output : u(n,m) - Solution
  *****************************************************************/
-void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
-                REAL *u_p, REAL *f_p, REAL tol, int mits) {
+void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega, REAL *u_p, REAL *f_p, REAL tol, int mits) {
   long i, j, k;
   REAL error;
   REAL ax;
@@ -294,23 +275,19 @@ void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
 
     /* Copy new solution into old */
     for (i = 0; i < n; i++)
-      for (j = 0; j < m; j++)
-        uold[i][j] = u[i][j];
+      for (j = 0; j < m; j++) uold[i][j] = u[i][j];
 
     for (i = 1; i < (n - 1); i++)
       for (j = 1; j < (m - 1); j++) {
-        resid = (ax * (uold[i - 1][j] + uold[i + 1][j]) +
-                 ay * (uold[i][j - 1] + uold[i][j + 1]) + b * uold[i][j] -
-                 f[i][j]) /
-                b;
+        resid =
+            (ax * (uold[i - 1][j] + uold[i + 1][j]) + ay * (uold[i][j - 1] + uold[i][j + 1]) + b * uold[i][j] - f[i][j]) / b;
         // printf("i: %d, j: %d, resid: %f\n", i, j, resid);
 
         u[i][j] = uold[i][j] - omega * resid;
         error = error + resid * resid;
       }
     /* Error check */
-    if (k % 500 == 0)
-      printf("Finished %ld iteration with error: %g\n", k, error);
+    if (k % 500 == 0) printf("Finished %ld iteration with error: %g\n", k, error);
     error = sqrt(error) / (n * m);
 
     k = k + 1;
@@ -324,25 +301,25 @@ void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
  * computation
  */
 //__constant__ REAL *cuda_f;
-__global__ void jacobi_kernel(long n, long m, REAL ax, REAL ay, REAL b,
-                              REAL omega, REAL *u, REAL *uold, REAL *resid,
+__global__ void jacobi_kernel(long n, long m, REAL ax, REAL ay, REAL b, REAL omega, REAL *u, REAL *uold, REAL *resid,
                               REAL *cuda_f) {
   long i, j;
   i = blockIdx.x * blockDim.x + threadIdx.x;
   j = blockIdx.y * blockDim.y + threadIdx.y;
 
-  if (i < n) {
-    if (j < n) {
-      resid[i * n + j] = (ax * (uold[(i - 1) * n + j] + uold[(i + 1) * n + j]) +
-                          ay * (uold[i * n + (j - 1)] + uold[i * n + (j + 1)]) +
-                          b * uold[i * n + j] - cuda_f[i * n + j]) /
-                         b;
-      u[i * n + j] = uold[i * n + j] - omega * resid[i * n + j];
-    }
-  }
+  if (i == 0 || j == 0) return;
+  if (i >= (n - 1) || j >= (m - 1)) return;
+
+  // if (i > 0 && i < (n - 1)) {
+  //  if (i > 0 && j < (m - 1)) {
+  resid[i * n + j] = (ax * (uold[(i - 1) * n + j] + uold[(i + 1) * n + j]) +
+                      ay * (uold[i * n + (j - 1)] + uold[i * n + (j + 1)]) + b * uold[i * n + j] - cuda_f[i * n + j]) /
+                     b;
+  u[i * n + j] = uold[i * n + j] - omega * resid[i * n + j];
+  //  }
+  //}
 }
-void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
-                 REAL *u_p, REAL *f_p, REAL tol, int mits) {
+void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega, REAL *u_p, REAL *f_p, REAL tol, int mits) {
   long i, j, k;
   REAL error;
   REAL ax;
@@ -397,8 +374,7 @@ void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
     cuda_u = cuda_uold;
     cuda_uold = temp;
     /* TODO #5: launch jacobi_kernel */
-    jacobi_kernel << <dimGrid, dimBlock>>>
-        (n, m, ax, ay, b, omega, cuda_u, cuda_uold, cuda_resid, cuda_f);
+    jacobi_kernel << <dimGrid, dimBlock>>> (n, m, ax, ay, b, omega, cuda_u, cuda_uold, cuda_resid, cuda_f);
     /* TODO #6: compute error on CPU or GPU. error is calculated by accumulating
     *          resid*resid computed by each thread. There are multiple
     * approaches to compute the error. E.g. 1). A array of resid[n][m]
@@ -417,8 +393,7 @@ void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
         error = error + resid[i * n + j] * resid[i * n + j];
       }
 
-    if (k % 500 == 0)
-      printf("Finished %ld iteration with error: %g\n", k, error);
+    if (k % 500 == 0) printf("Finished %ld iteration with error: %g\n", k, error);
     error = sqrt(error) / (n * m);
     k = k + 1;
   } /*  End iteration loop */
