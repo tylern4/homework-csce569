@@ -226,6 +226,7 @@ int main(int argc, char *argv[]) {
   free(f);
   free(ucuda);
   free(fcuda);
+  cudaFree(cuda_temp);
 
   return 0;
 }
