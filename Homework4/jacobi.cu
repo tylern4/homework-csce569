@@ -345,7 +345,7 @@ __global__ void jacobi_kernel(REAL *u, REAL *uold, REAL *resid, REAL *cuda_f) {
        c_b * uold[row * c_n + col] - cuda_f[row * c_n + col]) /
       c_b;
   u[row * c_n + col] = uold[row * c_n + col] - c_omega * resid[row * c_n + col];
-  resid[row * c_n + col] = resid[row * c_n + col] * resid[row * c_n + col];
+  // resid[row * c_n + col] = resid[row * c_n + col] * resid[row * c_n + col];
 }
 
 void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
@@ -422,7 +422,7 @@ void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
     cudaMemcpy(resid, cuda_resid, size, cudaMemcpyDeviceToHost);
     for (i = 1; i < (n - 1); i++)
       for (j = 1; j < (m - 1); j++) {
-        error += resid[i * n + j];
+        error += resid[i * n + j] * resid[i * n + j];
       }
 
     if (k % 500 == 0)
