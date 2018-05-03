@@ -324,50 +324,53 @@ void jacobi_seq(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
  * TODO #1: jacobi_kernel implementation of the double-nested loop for
  * computation
  */
-//__constant__ REAL *cuda_f;
-__global__ void jacobi_kernel(long n, long m, REAL ax, REAL ay, REAL b,
-                              REAL omega, REAL *u, REAL *uold, REAL *resid,
-                              REAL *cuda_f) {
-  long i, j;
-  i = blockIdx.x * blockDim.x + threadIdx.x;
-  j = blockIdx.y * blockDim.y + threadIdx.y;
+__constant__ float c_ax;
+__constant__ float c_ay;
+__constant__ float c_b;
+__constant__ float c_omega;
+__constant__ long c_n;
+__constant__ long c_m;
 
-  if (i == 0 || j == 0)
+__global__ void jacobi_kernel(REAL *u, REAL *uold, REAL *resid, REAL *cuda_f,
+                              float *cuda_error, REAL *temp) {
+  int row = blockIdx.x * blockDim.x + threadIdx.x;
+  int col = blockIdx.y * blockDim.y + threadIdx.y;
+  if (row == 0 || col == 0)
     return;
-  if (i >= (n - 1) || j >= (m - 1))
+  if (row >= (c_n - 1) || col >= (c_m - 1))
     return;
 
-  // if (i > 0 && i < (n - 1)) {
-  //  if (i > 0 && j < (m - 1)) {
-  resid[i * n + j] = (ax * (uold[(i - 1) * n + j] + uold[(i + 1) * n + j]) +
-                      ay * (uold[i * n + (j - 1)] + uold[i * n + (j + 1)]) +
-                      b * uold[i * n + j] - cuda_f[i * n + j]) /
-                     b;
-  u[i * n + j] = uold[i * n + j] - omega * resid[i * n + j];
-  //  }
-  //}
+  resid[row * c_n + col] =
+      (c_ax * (uold[(row - 1) * c_n + col] + uold[(row + 1) * c_n + col]) +
+       c_ay * (uold[row * c_n + (col - 1)] + uold[row * c_n + (col + 1)]) +
+       c_b * uold[row * c_n + col] - cuda_f[row * c_n + col]) /
+      c_b;
+  u[row * c_n + col] = uold[row * c_n + col] - c_omega * resid[row * c_n + col];
+  temp[row * c_n + col] = resid[row * c_n + col] * resid[row * c_n + col];
+  __syncthreads();
+  atomicAdd(cuda_error, (float)1.0);
+  // temp[row * c_n + col]);
+  *cuda_error = 99;
 }
+
 void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
                  REAL *u_p, REAL *f_p, REAL tol, int mits) {
   long i, j, k;
   REAL error;
-  REAL ax;
-  REAL ay;
-  REAL b;
+  REAL *tot_error;
   REAL *resid = (REAL *)malloc((sizeof(REAL) * n * m));
   REAL *uold = (REAL *)malloc((sizeof(REAL) * n * m));
   REAL *temp;
   REAL(*u)[m] = (REAL(*)[m])u_p;
   REAL(*f)[m] = (REAL(*)[m])f_p;
 
-  /*
-   * Initialize coefficients */
+  /* Initialize coefficients */
   /* X-direction coef */
-  ax = (1.0 / (dx * dx));
+  REAL ax = (1.0 / (dx * dx));
   /* Y-direction coef */
-  ay = (1.0 / (dy * dy));
+  REAL ay = (1.0 / (dy * dy));
   /* Central coeff */
-  b = (((-2.0 / (dx * dx)) - (2.0 / (dy * dy))) - alpha);
+  REAL b = (((-2.0 / (dx * dx)) - (2.0 / (dy * dy))) - alpha);
   error = (10.0 * tol);
   k = 1;
   /* TODO #2: CUDA memory allocation for u, f and uold and copy data for u and f
@@ -379,16 +382,25 @@ void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
   REAL *cuda_f;
   REAL *cuda_uold;
   REAL *cuda_resid;
+  REAL *cuda_temp;
+  float *cuda_error;
 
   // Copy u to cuda memory
   cudaMalloc((void **)&cuda_u, size);
   cudaMemcpy(cuda_u, u, size, cudaMemcpyHostToDevice);
-
   cudaMalloc((void **)&cuda_f, size);
   cudaMemcpy(cuda_f, f, size, cudaMemcpyHostToDevice);
-
   cudaMalloc((void **)&cuda_uold, size);
   cudaMalloc((void **)&cuda_resid, size);
+  cudaMalloc((void **)&cuda_temp, size);
+  cudaMalloc((void **)&cuda_error, sizeof(float));
+
+  cudaMemcpyToSymbol(c_ax, &ax, sizeof(REAL), 0, cudaMemcpyHostToDevice);
+  cudaMemcpyToSymbol(c_ay, &ay, sizeof(REAL), 0, cudaMemcpyHostToDevice);
+  cudaMemcpyToSymbol(c_b, &b, sizeof(REAL), 0, cudaMemcpyHostToDevice);
+  cudaMemcpyToSymbol(c_omega, &omega, sizeof(REAL), 0, cudaMemcpyHostToDevice);
+  cudaMemcpyToSymbol(c_n, &n, sizeof(long), 0, cudaMemcpyHostToDevice);
+  cudaMemcpyToSymbol(c_m, &m, sizeof(long), 0, cudaMemcpyHostToDevice);
 
   /* TODO #4: set 16x16 threads/block and n/16 x m/16 blocks/grid for GPU
    * computation (assuming n and m are dividable by 16 */
@@ -404,7 +416,7 @@ void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
     cuda_uold = temp;
     /* TODO #5: launch jacobi_kernel */
     jacobi_kernel << <dimGrid, dimBlock>>>
-        (n, m, ax, ay, b, omega, cuda_u, cuda_uold, cuda_resid, cuda_f);
+        (cuda_u, cuda_uold, cuda_resid, cuda_f, cuda_error, cuda_temp);
     /* TODO #6: compute error on CPU or GPU. error is calculated by accumulating
     *          resid*resid computed by each thread. There are multiple
     * approaches to compute the error. E.g. 1). A array of resid[n][m]
@@ -422,6 +434,11 @@ void jacobi_cuda(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
       for (j = 1; j < (m - 1); j++) {
         error = error + resid[i * n + j] * resid[i * n + j];
       }
+
+    cudaMemcpyFromSymbol(tot_error, cuda_error, sizeof(float), 0,
+                         cudaMemcpyDeviceToHost);
+    printf("%g\n", tot_error);
+    error = *tot_error;
 
     if (k % 500 == 0)
       printf("Finished %ld iteration with error: %g\n", k, error);
