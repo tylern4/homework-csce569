@@ -1,0 +1,198 @@
+\documentclass[a4paper]{article}
+
+\usepackage{fullpage} % Package to use full page
+\usepackage{parskip} % Package to tweak paragraph skipping
+\usepackage{tikz} % Package for drawing
+\usepackage{amsmath}
+\usepackage{hyperref}
+\usepackage{verbatimbox}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{subfigure}
+
+\definecolor{mygreen}{rgb}{0,0.6,0}
+\definecolor{mygray}{rgb}{0.5,0.5,0.5}
+\definecolor{mymauve}{rgb}{0.58,0,0.82}
+\lstset{ %
+  backgroundcolor=\color{white},   % choose the background color
+  basicstyle=\footnotesize,        % size of fonts used for the code
+  numberstyle=\tiny,
+  breaklines=true,                 % automatic line breaking only at whitespace
+  captionpos=b,                    % sets the caption-position to bottom
+  commentstyle=\color{mygreen},    % comment style
+  escapeinside={\%*}{*)},          % if you want to add LaTeX within your code
+  keywordstyle=\color{blue},       % keyword style
+  stringstyle=\color{mymauve},     % string literal style
+}
+
+\title{CSCE 569: Homework 4}
+\author{Nick Tyler}
+\date{05/04/18}
+
+\begin{document}
+
+\maketitle
+
+\section*{Matrix Multiplication}
+For each version of the matmul kernel function there is a basic setup function on the host which does the malloc and memcpy to device, then calls the kernel function, and then copies the resulting matrix from the device.
+\begin{lstlisting}[language=C++]
+// Determine size of matrix
+size_t size = N * N * sizeof(REAL);
+// Make cuda matricies
+REAL *cuda_A = NULL;
+REAL *cuda_B = NULL;
+REAL *cuda_C = NULL;
+// Copy A to cuda memory
+cudaMalloc((void **)&cuda_A, size);
+cudaMemcpy(cuda_A, A, size, cudaMemcpyHostToDevice);
+// Copy B to cuda memory
+cudaMalloc((void **)&cuda_B, size);
+cudaMemcpy(cuda_B, B, size, cudaMemcpyHostToDevice);
+// Allocate C to cuda memory
+cudaMalloc((void **)&cuda_C, size);
+dim3 dimBlock(BLOCK_SIZE, BLOCK_SIZE);
+dim3 dimGrid(N / dimBlock.x, N / dimBlock.y);
+kernel<<<dimGrid, dimBlock>>>(N, cuda_A, cuda_B, cuda_C);
+cudaMemcpy(C, cuda_C, size, cudaMemcpyDeviceToHost);
+cudaFree(cuda_A);
+cudaFree(cuda_B);
+cudaFree(cuda_C);
+\end{lstlisting}
+
+\section*{Matrix Multiplication Vanilla Kernel}
+For the vanilla kernel implementation two of the three loops are done by the black nature of the GPU and the third is looped over with a standard for loop. The row and column that are being processed are computed by knowing the blockId,blockDim and threadId.
+\begin{lstlisting}[language=C++]
+float Cvalue = 0;
+int row = blockIdx.y * blockDim.y + threadIdx.y;
+int col = blockIdx.x * blockDim.x + threadIdx.x;
+for (int e = 0; e < N; ++e)
+	Cvalue += A[row * N + e] * B[e * N + col];
+C[row * N + col] = Cvalue;
+\end{lstlisting}
+
+\section*{Matrix Multiplication Shared Memory Kernel}
+The shared memory kernel is a bit more complicated since it also computes the matrix in separate blocks. First there are 3 device kernels implemented to get an element of the matrix, set an element of the matrix and to get a sub-matrix which can fit in shared memory.
+\begin{lstlisting}[language=C++]
+// Get a matrix element
+__device__ float GetElement(REAL *A, int row, int col, int N) {
+  return A[row * N + col];
+}
+// Set a matrix element
+__device__ void SetElement(REAL *A, int row, int col, int N, float value) {
+  A[row * N + col] = value;
+}
+// Get the BLOCK_SIZExBLOCK_SIZE sub-matrix Asub of A
+__device__ REAL *GetSubMatrix(REAL *A, int row, int col, int N) {
+  REAL *Asub;
+  Asub = &A[N * BLOCK_SIZE * row + BLOCK_SIZE * col];
+  return Asub;
+}
+\end{lstlisting}
+
+These device kernels are called in the global kernel by first getting the sub matrix for the respective block. Then each sub matrix is looped over setting the elements into shared memory with the GetElement function. Once it is loaded the threads are synced and the computation is completed by copying the elements of the sub matrix into the total matrix.
+
+\begin{lstlisting}[language=C++]
+// Block row and column
+int blockRow = blockIdx.y;
+int blockCol = blockIdx.x;
+// Each thread block computes one sub-matrix Csub of C
+REAL *Csub = GetSubMatrix(C, blockRow, blockCol, N);
+float Cvalue = 0;
+// Thread row and column within Csub
+int row = threadIdx.y;
+int col = threadIdx.x;
+for (int m = 0; m < (N / BLOCK_SIZE); ++m) {
+	// Get sub-matrix Asub of A
+    REAL *Asub = GetSubMatrix(A, blockRow, m, N);
+    // Get sub-matrix Bsub of B
+    REAL *Bsub = GetSubMatrix(B, m, blockCol, N);
+    // Shared memory used to store Asub and Bsub respectively
+    __shared__ float As[BLOCK_SIZE][BLOCK_SIZE];
+    __shared__ float Bs[BLOCK_SIZE][BLOCK_SIZE];
+    // Load Asub and Bsub from device memory to shared memory
+    As[row][col] = GetElement(Asub, row, col, N);
+    Bs[row][col] = GetElement(Bsub, row, col, N);
+    // Synchronize to make sure the sub-matrices are loaded
+    __syncthreads();
+    // Multiply Asub and Bsub together
+    for (int e = 0; e < BLOCK_SIZE; ++e)
+      Cvalue += As[row][e] * Bs[e][col];
+    __syncthreads();
+// Write Csub to device memory
+SetElement(Csub, row, col, N, Cvalue);
+\end{lstlisting}
+
+\section*{Matrix Multiplication CuBLAS}
+The CuBLAS implementation is the easiest to implement since it does not even require the writing of a kernel, it is provided by the library. It follows the same procedure as before, copy matrix into memory, call kernel function, with the only difference being that there is a new object called a handle which is used when calling the cublasSgemm function.
+\begin{lstlisting}[language=C++]
+REAL alpha = 1.0f;
+REAL beta = 0.0f;
+cublasHandle_t handle;
+cublasCreate(&handle);
+cublasSgemm(handle, CUBLAS_OP_N, CUBLAS_OP_N, N, N, N, &alpha, 
+cuda_A, N, cuda_B, N, &beta, cuda_C, N);
+\end{lstlisting}
+
+\section*{Jacobi Iterative Method}
+Similar to the matrix multiplication problem the matrices need to be allocated and copied into the GPU memory. The values which do not change were copied into constant memory, instead of being called in the kernel function call.
+\begin{lstlisting}[language=C++]
+int size = (sizeof(REAL) * n * m);
+REAL *cuda_u;
+REAL *cuda_f;
+REAL *cuda_uold;
+REAL *cuda_resid;
+// Copy u to cuda memory
+cudaMalloc((void **)&cuda_u, size);
+cudaMemcpy(cuda_u, u, size, cudaMemcpyHostToDevice);
+cudaMalloc((void **)&cuda_f, size);
+cudaMemcpy(cuda_f, f, size, cudaMemcpyHostToDevice);
+cudaMalloc((void **)&cuda_uold, size);
+cudaMalloc((void **)&cuda_resid, size);
+\end{lstlisting}
+
+The kernel function will be called inside the while loop, after the u and uold are swapped. The residual is computed on the GPU and then the matrix is copied back to the host where the error was computed. There were many attempts to compute the error on the GPU but the solutions were either slower or did not return the proper error value to the host.
+\begin{lstlisting}[language=C++]
+while ((k <= mits) && (error > tol)) {
+	error = 0.0;
+    /* TODO #3: swap u and uold */
+    temp = cuda_u;
+    cuda_u = cuda_uold;
+    cuda_uold = temp;
+    /* TODO #5: launch jacobi_kernel */
+    jacobi_kernel <<<dimGrid, dimBlock>>> 
+    		(cuda_u, cuda_uold, cuda_resid, cuda_f);
+    /* Error check */
+    cudaMemcpy(resid, cuda_resid, size, cudaMemcpyDeviceToHost);
+    for (i = 1; i < (n - 1); i++)
+      for (j = 1; j < (m - 1); j++) {
+        error += resid[i * n + j] * resid[i * n + j];
+      }
+    if (k % 500 == 0) 
+    		printf("Finished %ld iteration with error: %g\n", k, error);   		
+	error = sqrt(error) / (n * m);
+    k = k + 1;
+}
+\end{lstlisting}
+
+\section*{Jacobi CUDA Kernel}
+Inside the kernel the loops were unrolled similar to the matrix multiplication, using the blockId,blockDim and threadId to get the proper elements of the matrix and computing the residual from those elements. It's important not to go over the bounds of the matrix so if the row and col are on the boundaries, the function returns without computing anything.
+\begin{lstlisting}[language=C++]
+int row = blockIdx.x * blockDim.x + threadIdx.x;
+int col = blockIdx.y * blockDim.y + threadIdx.y;
+if (row == 0 || col == 0) return;
+if (row >= (c_n - 1) || col >= (c_m - 1)) return;
+resid[row*c_n+col] = (c_ax * (uold[(row-1)*c_n+col]
+  					+ uold[(row+1)*c_n+col])
+  					+ c_ay * (uold[row*c_n+(col-1)]
+  					+ uold[row*c_n+(col+1)])
+  					+ c_b * uold[row * c_n + col] 
+  					- cuda_f[row * c_n + col]) / c_b;
+u[row*c_n+col] = uold[row*c_n+col] - c_omega*resid[row*c_n+col];
+\end{lstlisting}
+
+
+\pagebreak
+
+\end{document}
+              
+            
