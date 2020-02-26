@@ -1,9 +1,8 @@
+#include <math.h>
+#include <omp.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
-#include <omp.h>
-#include <sys/timeb.h>
 #include <sys/timeb.h>
 
 #define REAL float
@@ -356,7 +355,7 @@ void jacobi_omp(long n, long m, REAL dx, REAL dy, REAL alpha, REAL omega,
 
   while ((k <= mits) && (error > tol)) {
     error = 0.0;
-#pragma omp parallel
+#pragma omp parallel num_threads(4)
     {
 /* Copy new solution into old */
 #pragma omp for private(i, j)
